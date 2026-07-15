@@ -11,7 +11,7 @@ from typing import Callable
 
 import torch
 
-from .audio import merge_chunk_texts, split_wav
+from .audio import ffmpeg_executable, merge_chunk_texts, split_wav
 
 
 @dataclass(frozen=True)
@@ -102,6 +102,28 @@ class GigaAMService:
     @staticmethod
     def device() -> str:
         return "mps" if torch.backends.mps.is_available() else "cpu"
+
+    @staticmethod
+    def _configure_bundled_ffmpeg() -> None:
+        """Направляет внутренний вызов GigaAM на FFmpeg из установщика.
+
+        GigaAM вызывает команду ``ffmpeg`` напрямую даже для уже нормализованного
+        WAV. В Windows-пакете системный FFmpeg отсутствует, но imageio-ffmpeg
+        поставляет собственный бинарник с другим именем.
+        """
+        import gigaam.preprocess as preprocess
+
+        if getattr(preprocess, "_qaztriber_ffmpeg_configured", False):
+            return
+        original_run = preprocess.run
+
+        def bundled_run(command: list[str], *args: object, **kwargs: object):
+            if command and command[0] == "ffmpeg":
+                command = [ffmpeg_executable(), *command[1:]]
+            return original_run(command, *args, **kwargs)
+
+        preprocess.run = bundled_run
+        preprocess._qaztriber_ffmpeg_configured = True
 
     def is_cached(self, model_id: str) -> bool:
         return self.model_path(model_id).is_file()
@@ -209,6 +231,7 @@ class GigaAMService:
                 import gigaam
             except ImportError as error:
                 raise RuntimeError("GigaAM не установлен. Выполните установку зависимостей backend.") from error
+            self._configure_bundled_ffmpeg()
             self._model = gigaam.load_model(
                 definition.gigaam_name,
                 device=self.device(),

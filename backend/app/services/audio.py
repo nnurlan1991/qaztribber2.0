@@ -37,7 +37,7 @@ def run_ffmpeg(source: Path, destination: Path, start_seconds: float | None, end
     try:
         subprocess.run(command, check=True, capture_output=True, text=True)
     except FileNotFoundError as error:
-        raise AudioPreparationError("FFmpeg не найден. Установите его командой: brew install ffmpeg") from error
+        raise AudioPreparationError("Встроенный FFmpeg не найден. Переустановите QazTriber из актуального Windows-установщика.") from error
     except subprocess.CalledProcessError as error:
         message = error.stderr.strip() or "FFmpeg не смог прочитать аудиофайл."
         raise AudioPreparationError(message) from error
