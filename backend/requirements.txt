@@ -1,0 +1,11 @@
+fastapi>=0.115,<1.0
+uvicorn[standard]>=0.30,<1.0
+python-multipart>=0.0.9,<1.0
+pydantic>=2.8,<3.0
+soundfile>=0.12,<1.0
+imageio-ffmpeg>=0.6,<1.0
+numpy>=2.0,<3.0
+torch>=2.6
+torchaudio>=2.6
+gigaam @ git+https://github.com/salute-developers/GigaAM.git
+pytest>=8.0,<9.0

@@ -1,0 +1,38 @@
+# macOS
+.DS_Store
+.AppleDouble
+.LSOverride
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+
+# Environments
+env/
+venv/
+build_env/
+ENV/
+backend/.venv/
+frontend/node_modules/
+frontend/dist/
+release/
+
+# Build artifacts
+build/
+dist/
+*.egg-info/
+*.spec
+
+# Application specific
+recordings/
+*.pt
+*.ckpt
+
+# IDEs
+.idea/
+.vscode/
+.pytest_cache/
+*.tsbuildinfo
+graphify-out/
