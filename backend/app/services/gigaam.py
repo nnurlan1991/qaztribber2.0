@@ -1,7 +1,10 @@
 from __future__ import annotations
 
 import gc
+import hashlib
+import os
 import threading
+import urllib.request
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
@@ -39,7 +42,7 @@ MODELS: dict[str, ModelDefinition] = {
 
 
 class ModelPreloadManager:
-    """Скачивает оба чекпойнта заранее, но удерживает в памяти только один."""
+    """Скачивает чекпойнты на диск и сообщает честный прогресс скачивания."""
 
     def __init__(self, gigaam: "GigaAMService"):
         self.gigaam = gigaam
@@ -75,8 +78,7 @@ class ModelPreloadManager:
                         self.stage = stage
                         self.progress = min(0.98, base + fraction / len(definitions))
 
-                self.gigaam.load(definition.id, report)
-            self.gigaam.unload()
+                self.gigaam.ensure_download(definition.id, report)
             with self._lock:
                 self.status = "completed"
                 self.progress = 1.0
@@ -102,8 +104,84 @@ class GigaAMService:
         return "mps" if torch.backends.mps.is_available() else "cpu"
 
     def is_cached(self, model_id: str) -> bool:
-        definition = MODELS[model_id]
-        return any(self.models_dir.rglob(f"{definition.gigaam_name}*"))
+        return self.model_path(model_id).is_file()
+
+    def model_path(self, model_id: str) -> Path:
+        if model_id not in MODELS:
+            raise ValueError("Допустимы только модели 220M и 600M.")
+        return self.models_dir / f"{MODELS[model_id].gigaam_name}.ckpt"
+
+    def model_info(self, model_id: str) -> dict[str, object]:
+        path = self.model_path(model_id)
+        return {
+            "cached": path.is_file(),
+            "storage_path": str(path) if path.is_file() else None,
+            "size_bytes": path.stat().st_size if path.is_file() else 0,
+        }
+
+    @staticmethod
+    def _format_bytes(value: int) -> str:
+        return f"{value / (1024 * 1024):.0f} МБ"
+
+    @staticmethod
+    def _checksum(path: Path) -> str:
+        digest = hashlib.md5()
+        with path.open("rb") as source:
+            for chunk in iter(lambda: source.read(1024 * 1024), b""):
+                digest.update(chunk)
+        return digest.hexdigest()
+
+    def ensure_download(self, model_id: str, report: Callable[[str, float], None]) -> None:
+        """Скачивает checkpoint с прогрессом и атомарно сохраняет его на диск."""
+        if model_id not in MODELS:
+            raise ValueError("Допустимы только модели 220M и 600M.")
+        with self._lock:
+            definition = MODELS[model_id]
+            target = self.model_path(model_id)
+            self.models_dir.mkdir(parents=True, exist_ok=True)
+            import gigaam
+
+            expected_hash = gigaam._MODEL_HASHES[definition.gigaam_name]
+            if target.is_file() and self._checksum(target) == expected_hash:
+                report(f"GigaAM {definition.parameters} уже сохранена на диске.", 1.0)
+                return
+            if target.exists():
+                target.unlink()
+            temporary = target.with_suffix(".ckpt.part")
+            temporary.unlink(missing_ok=True)
+            url = f"{gigaam._URL_DIR}/{definition.gigaam_name}.ckpt"
+            report(f"Подключение к серверу GigaAM {definition.parameters}…", 0.0)
+            try:
+                with urllib.request.urlopen(url, timeout=60) as response, temporary.open("wb") as output:
+                    total = int(response.headers.get("Content-Length", "0"))
+                    received = 0
+                    while chunk := response.read(1024 * 1024):
+                        output.write(chunk)
+                        received += len(chunk)
+                        if total:
+                            fraction = min(received / total, 0.99)
+                            report(
+                                f"Скачивание {definition.parameters}: {self._format_bytes(received)} / {self._format_bytes(total)}",
+                                fraction,
+                            )
+                        else:
+                            report(f"Скачивание {definition.parameters}: {self._format_bytes(received)}", 0.0)
+                report(f"Проверка файла GigaAM {definition.parameters}…", 0.995)
+                if self._checksum(temporary) != expected_hash:
+                    raise RuntimeError("контрольная сумма не совпала; файл не сохранён")
+                os.replace(temporary, target)
+            except Exception as error:
+                temporary.unlink(missing_ok=True)
+                raise RuntimeError(f"Не удалось скачать GigaAM {definition.parameters}: {error}") from error
+            report(f"GigaAM {definition.parameters} сохранена на диске.", 1.0)
+
+    def delete(self, model_id: str) -> None:
+        """Удаляет сохранённую модель и освобождает занятую ею память, если нужно."""
+        with self._lock:
+            if self._active_model_id == model_id:
+                self.unload()
+            self.model_path(model_id).unlink(missing_ok=True)
+            self.model_path(model_id).with_suffix(".ckpt.part").unlink(missing_ok=True)
 
     def unload(self) -> None:
         self._model = None
@@ -125,7 +203,8 @@ class GigaAMService:
                 return
             self.unload()
             definition = MODELS[model_id]
-            report(f"Загрузка GigaAM {definition.parameters} в память…", 0.12)
+            self.ensure_download(model_id, lambda stage, fraction: report(stage, fraction * 0.22))
+            report(f"Загрузка GigaAM {definition.parameters} в память…", 0.24)
             try:
                 import gigaam
             except ImportError as error:

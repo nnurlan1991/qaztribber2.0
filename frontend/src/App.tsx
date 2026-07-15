@@ -1,5 +1,5 @@
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import { cancelJob, createJob, deleteJob, getModels, getPreload, getResult, Model, Preload, Result, Job, startPreload, watchJob } from "./api";
+import { cancelJob, createJob, deleteJob, deleteModel, getModels, getPreload, getResult, Model, Preload, Result, Job, startPreload, watchJob } from "./api";
 
 const SUPPORTED = ["audio/wav", "audio/mpeg", "audio/mp4", "audio/ogg", "audio/flac", "audio/webm"];
 const terminalStatuses = new Set<Job["status"]>(["completed", "failed", "cancelled"]);
@@ -7,6 +7,10 @@ const terminalStatuses = new Set<Job["status"]>(["completed", "failed", "cancell
 function formatTime(seconds: number) {
   const whole = Math.max(0, Math.floor(seconds));
   return `${Math.floor(whole / 60)}:${String(whole % 60).padStart(2, "0")}`;
+}
+
+function formatBytes(bytes: number) {
+  return `${(bytes / (1024 * 1024)).toFixed(bytes > 1024 * 1024 * 1024 ? 1 : 0)} МБ`;
 }
 
 export default function App() {
@@ -36,6 +40,12 @@ export default function App() {
     const timer = window.setInterval(() => getPreload().then(setPreload).catch((reason) => setError(reason.message)), 1200);
     return () => window.clearInterval(timer);
   }, [preload?.status]);
+
+  useEffect(() => {
+    if (!preload || preload.status === "downloading" || preload.status === "idle") return;
+    getModels().then(setModels).catch(() => undefined);
+    if (preload.status === "failed" && preload.error) setError(preload.error);
+  }, [preload?.status, preload?.error]);
 
   useEffect(() => {
     if (!job || terminalStatuses.has(job.status)) return;
@@ -139,13 +149,25 @@ export default function App() {
     }
   }
 
+  async function removeModel(model: Model) {
+    if (!window.confirm(`Удалить GigaAM ${model.parameters} с диска? При следующем использовании её потребуется скачать снова.`)) return;
+    try {
+      setError(null);
+      await deleteModel(model.id);
+      setModels(await getModels());
+      setPreload(await getPreload());
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : "Не удалось удалить модель.");
+    }
+  }
+
   return (
     <main className="shell">
       <header className="masthead">
         <nav className="top-nav"><b>Qaztriber</b><em>● ЛОКАЛЬНО</em></nav>
         <div className="hero-copy">
           <h1 className="meeting-title">АДЕКВАТНЫЙ<br /><span>ТРАНСКРИБАТОР</span><br />СОВЕЩАНИЙ</h1>
-          <p>KZ / RU / MIXED · ВАШ MAC</p>
+          <p>KZ / RU / MIXED · ВАШ WINDOWS-ПК</p>
           <div className="hero-flags"><b>GigaAM</b><span>220M / 600M</span></div>
         </div>
         <div className="sonic-object" aria-hidden="true"><i /><i /><i /><b>●<br />●<br />●</b></div>
@@ -153,8 +175,8 @@ export default function App() {
       </header>
 
       <section className="offline-card">
-        <div><span className="eyebrow">OFFLINE READY</span><strong>Обе модели на Mac</strong><p>Загрузите один раз — работайте без интернета.</p></div>
-        <div className="preload-actions"><button className="preload-button" disabled={preload?.status === "downloading" || preload?.status === "completed"} onClick={preloadModels}>{preload?.status === "completed" ? "✓ Модели готовы офлайн" : preload?.status === "downloading" ? "Загрузка…" : "Скачать обе модели"}</button>{preload && <small>{preload.stage}</small>}{preload?.status === "downloading" && <div className="mini-progress"><i style={{ width: `${Math.round(preload.progress * 100)}%` }} /></div>}</div>
+        <div><span className="eyebrow">OFFLINE READY</span><strong>Модели на вашем диске</strong><p>Скачиваются один раз, не занимают оперативную память после закрытия.</p></div>
+        <div className="preload-actions"><button className="preload-button" disabled={preload?.status === "downloading" || models.every((model) => model.cached)} onClick={preloadModels}>{models.every((model) => model.cached) ? "✓ Модели готовы офлайн" : preload?.status === "downloading" ? "Загрузка…" : "Скачать обе модели"}</button>{preload && <small>{preload.stage}</small>}{preload?.status === "downloading" && <div className="mini-progress"><i style={{ width: `${Math.round(preload.progress * 100)}%` }} /></div>}</div>
       </section>
 
       {error && <div className="notice error">{error}<button onClick={() => setError(null)}>×</button></div>}
@@ -177,7 +199,7 @@ export default function App() {
         <button className={recording ? "recording" : "record"} disabled={busy} onClick={toggleRecording}>{recording ? "■ Остановить запись" : "● Записать с микрофона"}</button>
 
         <div className="step-head"><span>02</span><h2>Модель</h2><em>{selected?.parameters ?? "загрузка"}</em></div>
-        <div className="models">{models.map((model) => <button key={model.id} className={`model ${selectedModel === model.id ? "selected" : ""}`} onClick={() => setSelectedModel(model.id)} disabled={busy}><span className="model-number">{model.parameters}</span><strong>{model.title}</strong><small>{model.description}</small><footer>{model.cached ? "✓ уже на диске" : "↓ загрузится при первом запуске"}</footer></button>)}</div>
+        <div className="models">{models.map((model) => <article key={model.id} className={`model ${selectedModel === model.id ? "selected" : ""}`}><button className="model-select" onClick={() => setSelectedModel(model.id)} disabled={busy}><span className="model-number">{model.parameters}</span><strong>{model.title}</strong><small>{model.description}</small></button><footer>{model.cached ? <><b>✓ На диске · {formatBytes(model.size_bytes)}</b><span title={model.storage_path || undefined}>{model.storage_path}</span><button className="delete-model" onClick={() => removeModel(model)} disabled={busy || preload?.status === "downloading"}>Удалить</button></> : "↓ Скачается перед первой расшифровкой"}</footer></article>)}</div>
         <div className="language"><div><span className="eyebrow">ЯЗЫК ЗАПИСИ</span><strong>KZ / RU / MIXED</strong></div><div className="language-options"><button className={expectedLanguage === "kazakh" ? "active" : ""} onClick={() => setExpectedLanguage("kazakh")} disabled={busy}>Қазақша</button><button className={expectedLanguage === "russian" ? "active" : ""} onClick={() => setExpectedLanguage("russian")} disabled={busy}>Русский</button><button className={expectedLanguage === "mixed" ? "active" : ""} onClick={() => setExpectedLanguage("mixed")} disabled={busy}>KZ + RU</button></div></div>
 
         <div className="run-row"><button className="run" disabled={!file || busy || recording} onClick={run}>{busy ? "Идёт обработка…" : `Расшифровать · ${selected?.parameters ?? "…"}`}</button>{busy && <button className="cancel" onClick={cancel}>Отменить</button>}</div>

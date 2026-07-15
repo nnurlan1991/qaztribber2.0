@@ -44,7 +44,7 @@ def get_job(request: Request, job_id: str) -> Job:
 def models(request: Request) -> list[ModelResponse]:
     gigaam = request.app.state.gigaam
     return [
-        ModelResponse(**definition.__dict__, cached=gigaam.is_cached(model_id))
+        ModelResponse(**definition.__dict__, **gigaam.model_info(model_id))
         for model_id, definition in MODELS.items()
     ]
 
@@ -62,6 +62,16 @@ def preload_status(request: Request) -> PreloadResponse:
 @router.post("/models/preload", response_model=PreloadResponse, status_code=202)
 def preload_models(request: Request) -> PreloadResponse:
     return preload_response(request.app.state.preload) if request.app.state.preload.status == "downloading" else PreloadResponse(**request.app.state.preload.start())  # type: ignore[arg-type]
+
+
+@router.delete("/models/{model_id}", status_code=204)
+def delete_model(request: Request, model_id: str) -> None:
+    if model_id not in MODELS:
+        raise HTTPException(status_code=404, detail="Модель не найдена.")
+    preload = request.app.state.preload
+    if preload.status == "downloading":
+        raise HTTPException(status_code=409, detail="Дождитесь окончания текущей загрузки моделей.")
+    request.app.state.gigaam.delete(model_id)
 
 
 @router.post("/transcriptions", response_model=JobResponse, status_code=202)

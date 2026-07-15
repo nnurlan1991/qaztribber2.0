@@ -1,4 +1,4 @@
-name: Build desktop launchers
+name: Build Windows launcher
 
 on:
   workflow_dispatch:
@@ -11,15 +11,7 @@ permissions:
 
 jobs:
   build:
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - os: macos-14
-            artifact: QazTriber-macOS
-          - os: windows-latest
-            artifact: QazTriber-Windows
-    runs-on: ${{ matrix.os }}
+    runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
@@ -41,20 +33,14 @@ jobs:
           python -m pip install -r backend/requirements.txt pyinstaller
       - name: Build launcher
         run: python packaging/build_release.py
-      - name: Package macOS DMG
-        if: runner.os == 'macOS'
-        run: |
-          mkdir -p release
-          hdiutil create -volname QazTriber -srcfolder dist/QazTriber.app -ov -format UDZO release/QazTriber-macOS.dmg
       - name: Package Windows installer
-        if: runner.os == 'Windows'
         shell: pwsh
         run: |
           choco install innosetup --no-progress -y
           & "C:\Program Files (x86)\Inno Setup 6\ISCC.exe" packaging\QazTriber.iss
       - uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.artifact }}
+          name: QazTriber-Windows
           path: release/*
       - name: Publish tagged release assets
         if: startsWith(github.ref, 'refs/tags/v')

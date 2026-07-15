@@ -30,6 +30,8 @@ class ModelResponse(BaseModel):
     parameters: str
     description: str
     cached: bool
+    storage_path: str | None = None
+    size_bytes: int = Field(ge=0)
 
 
 class JobResponse(BaseModel):

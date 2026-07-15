@@ -5,6 +5,8 @@ export type Model = {
   parameters: string;
   description: string;
   cached: boolean;
+  storage_path: string | null;
+  size_bytes: number;
 };
 
 export type Job = {
@@ -32,6 +34,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const getModels = () => request<Model[]>("/api/models");
+export const deleteModel = (modelId: Model["id"]) => request<void>(`/api/models/${modelId}`, { method: "DELETE" });
 export const getResult = (jobId: string) => request<Result>(`/api/transcriptions/${jobId}/result`);
 export const cancelJob = (jobId: string) => request<Job>(`/api/transcriptions/${jobId}/cancel`, { method: "POST" });
 export const deleteJob = (jobId: string) => request<void>(`/api/transcriptions/${jobId}`, { method: "DELETE" });
