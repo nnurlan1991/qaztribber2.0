@@ -27,7 +27,17 @@ def main() -> None:
         webbrowser.open(f"http://{HOST}:{PORT}")
         return
 
-    config = uvicorn.Config(app, host=HOST, port=PORT, log_level="warning")
+    # PyInstaller запускает Windows-версию без консоли: sys.stdout/sys.stderr
+    # могут быть None. Стандартный цветной логгер Uvicorn вызывает isatty() и
+    # из-за этого падает ещё до старта сервера. Логи для локального лаунчера
+    # не нужны, поэтому полностью отключаем его конфигурацию.
+    config = uvicorn.Config(
+        app,
+        host=HOST,
+        port=PORT,
+        log_config=None,
+        access_log=False,
+    )
     server = uvicorn.Server(config)
     thread = threading.Thread(target=server.run, name="qaztriber-local-server", daemon=True)
     thread.start()
