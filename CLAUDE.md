@@ -1,0 +1,159 @@
+# QazTriber — Project Guide
+
+> Контекстный файл для AI-агентов. Читай перед любой работой с проектом.
+
+## Overview
+
+**QazTriber** — десктопное приложение для офлайн-расшифровки казахской, русской и смешанной речи. Аудио обрабатывается локально на устройстве пользователя (модели GigaAM, PyTorch). Никаких облаков, аккаунтов, телеметрии.
+
+## Products
+
+| Продукт | Платформа | Где проект |
+|---------|-----------|------------|
+| Desktop (macOS/Windows) | Tauri 2.x + Python sidecar | этот репозиторий |
+| Mobile (Android) | нативный (Kotlin/Compose) | `/Users/market/Documents/проекты программиста/qaztribber_mobile/` |
+| Landing | статичный HTML на nginx | `landing/index.html` + сервер |
+| Models hosting | nginx статика | `https://qaztribber.aidi-lab.kz/models/desktop/` |
+
+## Tech Stack
+
+### Frontend (desktop)
+- **Tauri 2.x** — нативное окно, Rust-ядро
+- **React 18 + TypeScript** — UI
+- **Vite** — бандлер
+- Дизайн-система: obsidian+gold (dark/light темы), токены в `styles.css`
+
+### Backend (sidecar)
+- **Python 3.11**, FastAPI, Uvicorn
+- **PyInstaller** (`--onedir`) → `src-tauri/binaries/qaztriber-backend/`
+- **GigaAM** модели (PyTorch): MPS на Apple Silicon, CPU на Windows
+- venv: `backend/.venv/bin/python` (Python 3.11, arm64)
+
+### Build pipeline
+```bash
+# 1. Frontend → frontend/dist/
+cd frontend && npm run build
+
+# 2. Sidecar (PyInstaller + strip) → src-tauri/binaries/qaztriber-backend/
+backend/.venv/bin/python packaging/build_release.py
+
+# 3. Tauri app → src-tauri/target/release/bundle/macos|dmg|nsis/
+npm run tauri build
+```
+
+## Architecture (критичные детали)
+
+### Frontend вшит в Python sidecar
+PyInstaller копирует `frontend/dist/` в `_internal/frontend/dist/`. **Пересборка только Tauri НЕ обновляет frontend** — нужно пересобирать sidecar каждый раз.
+
+### Модели НЕ вшиты в .app
+Скачиваются при первом запуске (~3 ГБ) с `https://qaztribber.aidi-lab.kz/models/desktop/`. Две модели:
+- `multilingual_ctc.ckpt` (220M, ~880 МБ) — быстрая
+- `multilingual_large_ctc.ckpt` (600M, ~2.3 ГБ) — точная
+
+### Polling вместо SSE
+`watchJob()` в `api.ts` использует `setTimeout`-polling каждые 500мс (не EventSource) — надёжнее, нет ложных onerror.
+
+### Backend endpoint `/api/system`
+Возвращает device, CPU brand, memory, speed_multiplier — для расчёта ETA расшифровки.
+
+### strip_sidecar() в build_release.py
+Удаляет дубликаты libtorch библиотек (`.dylib` на Mac, `.dll` на Windows) из `torch/lib/` — экономит ~350 МБ. Кроссплатформенный.
+
+## Deployment
+
+### Desktop builds (CI)
+- **Workflow:** `.github/workflows/release.yml`
+- **Триггер:** push тега `v*` или ручной dispatch
+- **Платформы:** macOS (`macos-14`) + Windows (`windows-latest`) параллельно
+- **Результат:** `.dmg` (macOS) + `.exe` (Windows) в GitHub Releases
+- **Релиз:** `git tag v1.x.0 && git push origin v1.x.0`
+
+### Landing page
+- **Сервер:** `qaztribber.aidi-lab.kz` (nginx, Hetzner)
+- **Файл:** `/var/www/qaztribber/index.html`
+- **Зеркало:** GitHub Pages → `https://nnurlan1991.github.io/qaztriber2.0/`
+- **Workflow:** `.github/workflows/pages.yml` (авто-деплой при пуше в `landing/`)
+
+### Models
+- Хостинг: `https://qaztribber.aidi-lab.kz/models/desktop/`
+- Файлы: `multilingual_ctc.ckpt`, `multilingual_large_ctc.ckpt`, `manifest.json`
+- Range requests включены (resume downloads)
+
+## Server Access
+
+| Параметр | Значение |
+|----------|----------|
+| Host | `46.224.176.8` (также `aidi-lab.kz`) |
+| User | `ai` |
+| SSH key | `~/.ssh/ai_project1` |
+| Команда | `ssh -i ~/.ssh/ai_project1 ai@46.224.176.8` |
+| sudo | без пароля |
+| Webroot | `/var/www/qaztribber/` |
+| nginx config | `/etc/nginx/sites-enabled/qaztribber.aidi-lab.kz` |
+| SSL | Let's Encrypt (Certbot) |
+
+### Другие сервисы на сервере
+- `aidi-lab.kz` — Node.js (:3000)
+- `dastarkhan.online` — Node.js (:3001)
+- `slidegen.aidi-lab.kz`, `tapsiramin`, `tapsirubot.aidi-lab.kz`, `vp.aidi-lab.kz`, `oyau`
+
+## GitHub
+
+| Параметр | Значение |
+|----------|----------|
+| Repo | `https://github.com/nnurlan1991/qaztribber2.0` (public) |
+| Owner | `nnurlan1991` |
+| Releases | `https://github.com/nnurlan1991/qaztribber2.0/releases` |
+| Latest | v1.1.0 |
+| Assets | `.dmg` (195 MB), `.exe` (150 MB), `.apk` (75 MB) |
+
+### Прямые ссылки на скачивание
+- macOS: `https://github.com/nnurlan1991/qaztribber2.0/releases/latest/download/QazTriber_1.0.0_aarch64.dmg`
+- Windows: `https://github.com/nnurlan1991/qaztribber2.0/releases/latest/download/QazTriber_1.0.0_x64-setup.exe`
+- Android: `https://github.com/nnurlan1991/qaztribber2.0/releases/latest/download/QazTriber_1.0.0.apk`
+
+## Key Files
+
+```
+frontend/src/
+  views/          — HomeView, HistoryView, SessionView, ModelsView, SettingsView
+  components/     — Sidebar, TopBar, RecordButton, ProgressBar, Waveform, Modal, StatusBadge
+  store.tsx       — React context (theme, language, systemInfo)
+  api.ts          — polling watchJob, getSystemInfo
+  styles.css      — obsidian+gold дизайн-система
+  i18n.ts         — RU/KZ переводы
+  storage.ts      — localStorage сессии
+
+backend/app/
+  api/transcriptions.py — endpoints (/transcribe, /system, /sessions)
+  services/gigaam.py    — GigaAM wrapper, MODEL_DOWNLOAD_BASE
+  schemas.py            — Pydantic schemas (SystemInfoResponse и др.)
+
+packaging/build_release.py — PyInstaller + strip_sidecar()
+src-tauri/tauri.conf.json   — Tauri config
+.github/workflows/release.yml — CI сборка desktop
+.github/workflows/pages.yml   — CI деплой лендинга
+landing/index.html            — лендинг
+```
+
+## Important Notes
+
+- **Windows CI:** env `PYTHONUTF8=1` обязателен — иначе `UnicodeEncodeError` на кириллице в print()
+- **DMG locally:** `bundle_dmg.sh` падает на macOS, но .app собирается. CI собирает .dmg успешно.
+- **GigaAM:** PyTorch (не ONNX) — MPS на Apple Silicon, CPU на Windows
+- **.swarm/ и .opencode/** в `.gitignore` — не коммитить
+- **Ключ `id_rsa_aidi`** на этом Mac не работает для сервера — использовать `ai_project1`
+
+## Languages & i18n
+
+- Языки интерфейса: **RU** (русский), **KZ** (казахский)
+- Языки распознавания: kazakh, russian, mixed (KZ+RU)
+- Переводы в `frontend/src/i18n.ts`
+
+## Models (GigaAM)
+
+- Использует PyTorch (не ONNX)
+- `device()` в `gigaam.py` определяет `mps` или `cpu`
+- 220M (быстрая, ~3x realtime на MPS) и 600M (точная, ~1x realtime)
+- Скачиваются с `https://qaztribber.aidi-lab.kz/models/desktop/`
