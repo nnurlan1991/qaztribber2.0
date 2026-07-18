@@ -107,7 +107,7 @@ PyInstaller копирует `frontend/dist/` в `_internal/frontend/dist/`. **�
 | Releases | `https://github.com/nnurlan1991/qaztribber2.0/releases` |
 | Latest | v1.1.0 |
 | Desktop assets | `.dmg` (195 MB), `.exe` (150 MB) |
-| Mobile repo | `https://github.com/nnurlan1991/qaztribber_mobile` (private) |
+| Mobile repo | `https://github.com/nnurlan1991/qaztribber_mobile` (public) |
 | Mobile asset | `QazTriber.apk` (75 MB) — без версии в имени |
 
 ### Прямые ссылки на скачивание
