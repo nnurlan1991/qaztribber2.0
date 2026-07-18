@@ -12,6 +12,12 @@ import subprocess
 import sys
 from pathlib import Path
 
+# Force UTF-8 stdout/stderr — Windows console defaults to cp1252 and crashes
+# on Cyrillic in print() statements (UnicodeEncodeError).
+if hasattr(sys.stdout, "reconfigure"):
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+
 ROOT = Path(__file__).resolve().parents[1]
 FRONTEND_DIST = ROOT / "frontend" / "dist"
 BINARIES_DIR = ROOT / "src-tauri" / "binaries"
@@ -61,7 +67,52 @@ def main() -> None:
     subprocess.run(command, cwd=ROOT, check=True)
 
     shutil.copytree(DIST / SIDECAR_DIR_NAME, target_sidecar)
+    strip_sidecar(target_sidecar)
     print(f"Sidecar собран: {target_sidecar}")
+
+
+def strip_sidecar(sidecar_dir: Path) -> None:
+    """Удаляет дубликаты libtorch и неиспользуемые модули для уменьшения размера.
+
+    PyInstaller кладёт libtorch библиотеки в двух местах:
+    _internal/ и _internal/torch/lib/. Вторая копия — дубликат.
+    Удаляем дубликаты из torch/lib/, оставляем в _internal/ (нужны для @rpath/@loader).
+
+    Работает кроссплатформенно: .dylib (macOS) и .dll (Windows).
+    """
+    internal = sidecar_dir / "_internal"
+    if not internal.is_dir():
+        return
+
+    # Расширения библиотек по платформе
+    if sys.platform == "win32":
+        lib_ext = ".dll"
+        lib_prefix = ""
+    else:
+        lib_ext = ".dylib"
+        lib_prefix = "lib"
+
+    # 1. Дубликаты libtorch в torch/lib/ (оригиналы в _internal/, нужны для @rpath)
+    torch_lib_names = [
+        f"{lib_prefix}torch_cpu{lib_ext}",
+        f"{lib_prefix}torch_python{lib_ext}",
+        f"{lib_prefix}torch{lib_ext}",
+        f"{lib_prefix}torch_global_deps{lib_ext}",
+        f"{lib_prefix}c10{lib_ext}",
+        f"{lib_prefix}omp{lib_ext}",
+    ]
+    for name in torch_lib_names:
+        path = internal / "torch" / "lib" / name
+        canonical = internal / name
+        if path.is_file() and canonical.is_file():
+            size = path.stat().st_size
+            path.unlink()
+            print(f"  удалён дубликат: torch/lib/{name} ({size / 1024 / 1024:.0f} МБ)")
+
+    # 2. __pycache__ везде (безопасно — .pyc перегенерируется)
+    for cache in internal.rglob("__pycache__"):
+        if cache.is_dir():
+            shutil.rmtree(cache, ignore_errors=True)
 
 
 if __name__ == "__main__":

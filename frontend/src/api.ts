@@ -23,6 +23,17 @@ export type Job = {
 export type Result = { id: string; text: string; model: "220m" | "600m"; expected_language: "kazakh" | "russian" | "mixed"; duration_seconds: number | null };
 export type Preload = { status: "idle" | "downloading" | "completed" | "failed"; progress: number; stage: string; error: string | null };
 
+export type SystemInfo = {
+  device: string;
+  cpu_count: number;
+  cpu_brand: string;
+  memory_gb: number;
+  os: string;
+  arch: string;
+  speed_multiplier_220m: number;
+  speed_multiplier_600m: number;
+};
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
   const response = await fetch(path, init);
   if (!response.ok) {
@@ -40,6 +51,8 @@ export const cancelJob = (jobId: string) => request<Job>(`/api/transcriptions/${
 export const deleteJob = (jobId: string) => request<void>(`/api/transcriptions/${jobId}`, { method: "DELETE" });
 export const getPreload = () => request<Preload>("/api/models/preload");
 export const startPreload = () => request<Preload>("/api/models/preload", { method: "POST" });
+export const getSystemInfo = () => request<SystemInfo>("/api/system");
+export const getJob = (jobId: string) => request<Job>(`/api/transcriptions/${jobId}`);
 
 export async function createJob(file: File, model: Model["id"], expectedLanguage: Job["expected_language"], start: number, end: number): Promise<Job> {
   const form = new FormData();
@@ -51,12 +64,42 @@ export async function createJob(file: File, model: Model["id"], expectedLanguage
   return request<Job>("/api/transcriptions", { method: "POST", body: form });
 }
 
+const TERMINAL_STATUSES = new Set<Job["status"]>(["completed", "failed", "cancelled"]);
+
+/**
+ * Polling вместо SSE — надёжнее, нет ложных onerror при закрытии стрима.
+ * Опрашивает /api/transcriptions/{id} каждые 500мс до терминального статуса.
+ */
 export function watchJob(jobId: string, onJob: (job: Job) => void, onError: () => void): () => void {
-  const events = new EventSource(`/api/transcriptions/${jobId}/events`);
-  events.addEventListener("progress", (event) => onJob(JSON.parse((event as MessageEvent).data) as Job));
-  events.onerror = () => {
-    onError();
-    events.close();
+  let stopped = false;
+  let timer: number | null = null;
+
+  async function poll() {
+    if (stopped) return;
+    try {
+      const job = await getJob(jobId);
+      if (stopped) return;
+      onJob(job);
+      if (TERMINAL_STATUSES.has(job.status)) {
+        stopped = true;
+        return;
+      }
+    } catch {
+      if (!stopped) {
+        onError();
+        stopped = true;
+      }
+      return;
+    }
+    if (!stopped) {
+      timer = window.setTimeout(poll, 500);
+    }
+  }
+
+  poll();
+
+  return () => {
+    stopped = true;
+    if (timer) window.clearTimeout(timer);
   };
-  return () => events.close();
 }

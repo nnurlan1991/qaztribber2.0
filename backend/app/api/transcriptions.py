@@ -2,14 +2,17 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
+import platform
+import sys
 from pathlib import Path
 
 from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from ..config import settings
-from ..schemas import JobResponse, JobStatus, ModelResponse, PreloadResponse, ResultResponse
-from ..services.gigaam import MODELS, ModelPreloadManager
+from ..schemas import JobResponse, JobStatus, ModelResponse, PreloadResponse, ResultResponse, SystemInfoResponse
+from ..services.gigaam import GigaAMService, MODELS, ModelPreloadManager
 from ..services.jobs import Job, JobManager
 
 router = APIRouter(prefix="/api", tags=["transcriptions"])
@@ -47,6 +50,88 @@ def models(request: Request) -> list[ModelResponse]:
         ModelResponse(**definition.__dict__, **gigaam.model_info(model_id))
         for model_id, definition in MODELS.items()
     ]
+
+
+@router.get("/system", response_model=SystemInfoResponse)
+def system_info(request: Request) -> SystemInfoResponse:
+    """Возвращает характеристики устройства для оценки времени транскрипции."""
+    gigaam = request.app.state.gigaam
+    device = GigaAMService.device()
+
+    # Определяем CPU brand
+    cpu_brand = platform.processor() or "Unknown CPU"
+    if sys.platform == "darwin":
+        try:
+            import subprocess
+            result = subprocess.run(
+                ["sysctl", "-n", "machdep.cpu.brand_string"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if result.returncode == 0 and result.stdout.strip():
+                cpu_brand = result.stdout.strip()
+        except Exception:
+            pass
+    elif sys.platform == "win32":
+        cpu_brand = platform.processor() or os.environ.get("PROCESSOR_IDENTIFIER", "Unknown CPU")
+
+    # Определяем объём памяти
+    memory_gb = 0.0
+    try:
+        if sys.platform == "darwin":
+            import subprocess
+            result = subprocess.run(
+                ["sysctl", "-n", "hw.memsize"],
+                capture_output=True, text=True, timeout=2,
+            )
+            if result.returncode == 0:
+                memory_gb = int(result.stdout.strip()) / (1024 ** 3)
+        elif sys.platform == "win32":
+            import ctypes
+            class MEMORYSTATUSEX(ctypes.Structure):
+                _fields_ = [
+                    ("dwLength", ctypes.c_ulong),
+                    ("dwMemoryLoad", ctypes.c_ulong),
+                    ("ullTotalPhys", ctypes.c_ulonglong),
+                    ("ullAvailPhys", ctypes.c_ulonglong),
+                    ("ullTotalPageFile", ctypes.c_ulonglong),
+                    ("ullAvailPageFile", ctypes.c_ulonglong),
+                    ("ullTotalVirtual", ctypes.c_ulonglong),
+                    ("ullAvailVirtual", ctypes.c_ulonglong),
+                    ("ullAvailExtendedVirtual", ctypes.c_ulonglong),
+                ]
+            stat = MEMORYSTATUSEX()
+            stat.dwLength = ctypes.sizeof(stat)
+            ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(stat))
+            memory_gb = stat.ullTotalPhys / (1024 ** 3)
+    except Exception:
+        pass
+
+    # Оценка скорости: множитель относительно реального времени
+    # На основе empirics: GigaAM 220M на MPS ~0.35x, на CPU ~1.2x
+    # 600M примерно в 2x медленнее 220M
+    if device == "mps":
+        speed_220m = 0.35
+        speed_600m = 0.70
+    elif device == "cuda":
+        speed_220m = 0.20
+        speed_600m = 0.45
+    else:
+        # CPU — зависит от ядер
+        cpu_count = os.cpu_count() or 4
+        base = max(0.8, 2.5 - cpu_count * 0.15)
+        speed_220m = base
+        speed_600m = base * 2.0
+
+    return SystemInfoResponse(
+        device=device,
+        cpu_count=os.cpu_count() or 1,
+        cpu_brand=cpu_brand,
+        memory_gb=round(memory_gb, 1),
+        os=f"{platform.system()} {platform.release()}",
+        arch=platform.machine(),
+        speed_multiplier_220m=speed_220m,
+        speed_multiplier_600m=speed_600m,
+    )
 
 
 def preload_response(preload: ModelPreloadManager) -> PreloadResponse:

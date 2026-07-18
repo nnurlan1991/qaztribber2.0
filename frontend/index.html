@@ -1,10 +1,27 @@
 <!doctype html>
-<html lang="ru">
+<html lang="ru" data-theme="dark">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="theme-color" content="#141512" />
+    <meta name="theme-color" content="#0d0b0c" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <title>QazTriber — локальная расшифровка</title>
+    <script>
+      // Apply saved theme before React renders to avoid flash.
+      (function () {
+        try {
+          var raw = localStorage.getItem("qaztriber.prefs.v1");
+          var theme = raw ? (JSON.parse(raw).theme || "dark") : "dark";
+          var resolved = theme;
+          if (theme === "system") {
+            resolved = window.matchMedia && window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
+          }
+          document.documentElement.setAttribute("data-theme", resolved);
+          document.documentElement.style.colorScheme = resolved;
+        } catch (e) {}
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

@@ -34,6 +34,10 @@ node_modules/.vite/
 
 # opencode / agent artifacts
 .opencode/
+.swarm/
+
+# Backup files
+*.bak
 
 # Application specific
 recordings/

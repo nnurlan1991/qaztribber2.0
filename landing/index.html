@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>QazTriber — Локальная расшифровка речи для Mac, Windows и Android</title>
+  <meta name="description" content="QazTriber — офлайн-расшифровка казахской, русской и смешанной речи. Аудио не покидает ваше устройство." />
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    :root {
+      --obsidian: #0d0b0c;
+      --surface: #151314;
+      --surface-2: #211f20;
+      --gold: #e6ca65;
+      --gold-dark: #996515;
+      --on-surface: #e7e1e2;
+      --muted: #97907e;
+      --border: rgba(255,255,255,0.08);
+    }
+    body {
+      font-family: -apple-system, 'Manrope', 'Inter', system-ui, sans-serif;
+      background: var(--obsidian);
+      color: var(--on-surface);
+      min-height: 100vh;
+      overflow-x: hidden;
+    }
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background:
+        radial-gradient(900px 600px at 15% -5%, rgba(230,202,101,0.08), transparent 60%),
+        radial-gradient(800px 500px at 95% 110%, rgba(153,101,21,0.06), transparent 55%);
+      pointer-events: none;
+      z-index: 0;
+    }
+    .wrap { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; padding: 0 24px; }
+
+    /* Header */
+    header { padding: 28px 0; display: flex; align-items: center; justify-content: space-between; }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .brand svg { width: 40px; height: 40px; }
+    .brand-name {
+      font-size: 22px; font-weight: 800; letter-spacing: -0.02em;
+      background: linear-gradient(90deg, var(--gold), var(--gold-dark));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .brand-tag { font-size: 11px; color: var(--muted); font-family: ui-monospace, monospace; letter-spacing: 0.1em; text-transform: uppercase; }
+    .badge-offline {
+      padding: 6px 14px; border-radius: 99px;
+      background: rgba(143,212,122,0.12); color: #8fd47a;
+      font-size: 12px; font-weight: 700; letter-spacing: 0.04em;
+      border: 1px solid rgba(143,212,122,0.2);
+    }
+
+    /* Hero */
+    .hero { text-align: center; padding: 80px 0 60px; }
+    .hero h1 {
+      font-size: clamp(40px, 6vw, 72px);
+      font-weight: 800; letter-spacing: -0.03em;
+      line-height: 1.05; margin-bottom: 20px;
+    }
+    .hero h1 .gold {
+      background: linear-gradient(90deg, var(--gold), var(--gold-dark));
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .hero p {
+      font-size: clamp(16px, 2vw, 20px);
+      color: var(--muted); max-width: 620px; margin: 0 auto 40px;
+      line-height: 1.6;
+    }
+
+    /* Download buttons */
+    .downloads { display: flex; flex-wrap: wrap; justify-content: center; gap: 16px; margin-bottom: 20px; }
+    .dl-btn {
+      display: flex; align-items: center; gap: 14px;
+      padding: 18px 28px; border-radius: 14px;
+      background: linear-gradient(135deg, var(--gold) 0%, var(--gold-dark) 100%);
+      color: #1a1206; text-decoration: none;
+      font-size: 16px; font-weight: 700;
+      box-shadow: 0 8px 24px rgba(153,101,21,0.3), inset 0 1px 0 rgba(255,255,255,0.3);
+      transition: transform 0.15s, box-shadow 0.15s;
+      min-width: 200px;
+    }
+    .dl-btn:hover { transform: translateY(-2px); box-shadow: 0 12px 32px rgba(153,101,21,0.4), inset 0 1px 0 rgba(255,255,255,0.4); }
+    .dl-btn:active { transform: translateY(0); }
+    .dl-btn svg { width: 28px; height: 28px; flex-shrink: 0; }
+    .dl-btn .label { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+    .dl-btn .platform { font-size: 14px; opacity: 0.7; font-weight: 600; }
+    .dl-btn.secondary {
+      background: var(--surface-2); color: var(--on-surface);
+      border: 1px solid var(--border);
+      box-shadow: none;
+    }
+    .dl-btn.secondary:hover { background: rgba(255,255,255,0.06); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+    .dl-hint { font-size: 13px; color: var(--muted); margin-top: 8px; }
+    .dl-detected { font-size: 14px; color: var(--gold); margin-bottom: 24px; font-weight: 600; }
+
+    /* Features */
+    .features { padding: 80px 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 24px; }
+    .feature {
+      padding: 32px; border-radius: 18px;
+      background: rgba(255,255,255,0.02);
+      border: 1px solid var(--border);
+      backdrop-filter: blur(10px);
+    }
+    .feature-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: rgba(230,202,101,0.1);
+      display: flex; align-items: center; justify-content: center;
+      margin-bottom: 16px;
+    }
+    .feature-icon svg { width: 24px; height: 24px; }
+    .feature h3 { font-size: 18px; font-weight: 700; margin-bottom: 8px; }
+    .feature p { font-size: 14px; color: var(--muted); line-height: 1.6; }
+
+    /* How it works */
+    .how { padding: 60px 0; text-align: center; }
+    .how h2 { font-size: clamp(28px, 4vw, 40px); font-weight: 800; letter-spacing: -0.02em; margin-bottom: 40px; }
+    .steps { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 32px; }
+    .step { text-align: center; }
+    .step-num {
+      width: 56px; height: 56px; border-radius: 50%;
+      background: linear-gradient(135deg, var(--gold), var(--gold-dark));
+      color: #1a1206; display: flex; align-items: center; justify-content: center;
+      font-size: 24px; font-weight: 800; margin: 0 auto 16px;
+    }
+    .step h4 { font-size: 16px; font-weight: 700; margin-bottom: 6px; }
+    .step p { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+    /* Footer */
+    footer { padding: 40px 0; border-top: 1px solid var(--border); text-align: center; }
+    footer p { font-size: 13px; color: var(--muted); }
+    footer a { color: var(--gold); text-decoration: none; }
+
+    @media (max-width: 640px) {
+      .hero { padding: 48px 0 40px; }
+      .downloads { flex-direction: column; align-items: center; }
+      .dl-btn { width: 100%; max-width: 320px; justify-content: center; }
+    }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <div class="brand">
+        <!-- Logo SVG -->
+        <svg viewBox="0 0 342 342" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <rect width="342" height="342" rx="76" fill="#2D080E"/>
+          <rect x="99" y="121" width="12" height="130" rx="6" fill="url(#g1)"/>
+          <rect x="123" y="91" width="12" height="190" rx="6" fill="url(#g2)"/>
+          <rect x="147" y="116" width="12" height="140" rx="6" fill="#fff"/>
+          <rect x="165" y="56" width="12" height="260" rx="6" fill="url(#g3)"/>
+          <rect x="183" y="116" width="12" height="140" rx="6" fill="#fff"/>
+          <rect x="207" y="91" width="12" height="190" rx="6" fill="url(#g4)"/>
+          <rect x="231" y="121" width="12" height="130" rx="6" fill="url(#g5)"/>
+          <path d="M55 116C70 80 95 50 130 30" stroke="url(#g1)" stroke-width="5" stroke-linecap="round" fill="none"/>
+          <defs>
+            <linearGradient id="g1" x1="0" y1="1" x2="0" y2="0"><stop stop-color="#B8860B"/><stop offset="0.5" stop-color="#E6CA65"/><stop offset="1" stop-color="#996515"/></linearGradient>
+            <linearGradient id="g2" x1="0" y1="1" x2="0" y2="0"><stop stop-color="#B8860B"/><stop offset="0.5" stop-color="#E6CA65"/><stop offset="1" stop-color="#996515"/></linearGradient>
+            <linearGradient id="g3" x1="0" y1="1" x2="0" y2="0"><stop stop-color="#B8860B"/><stop offset="0.5" stop-color="#E6CA65"/><stop offset="1" stop-color="#996515"/></linearGradient>
+            <linearGradient id="g4" x1="0" y1="1" x2="0" y2="0"><stop stop-color="#B8860B"/><stop offset="0.5" stop-color="#E6CA65"/><stop offset="1" stop-color="#996515"/></linearGradient>
+            <linearGradient id="g5" x1="0" y1="1" x2="0" y2="0"><stop stop-color="#B8860B"/><stop offset="0.5" stop-color="#E6CA65"/><stop offset="1" stop-color="#996515"/></linearGradient>
+          </defs>
+        </svg>
+        <div>
+          <div class="brand-name">QazTriber</div>
+          <div class="brand-tag">Локальная расшифровка</div>
+        </div>
+      </div>
+      <span class="badge-offline">100% Офлайн</span>
+    </header>
+
+    <section class="hero">
+      <h1>Расшифровка речи<br><span class="gold">без облака</span></h1>
+      <p>QazTriber — десктопное приложение для транскрибации казахской, русской и смешанной речи. Аудио обрабатывается локально на вашем устройстве. Никаких серверов, никакой слежки.</p>
+
+      <div class="dl-detected" id="detected"></div>
+
+      <div class="downloads">
+        <a class="dl-btn" id="btn-mac" href="https://github.com/nnurlan1991/qaztribber2.0/releases/latest/download/QazTriber_1.0.0_aarch64.dmg">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.05 20.28c-.98.95-2.05.8-3.08.35-1.09-.46-2.09-.48-3.24 0-1.44.62-2.2.44-3.06-.35C2.79 15.25 3.51 7.59 9.05 7.31c1.35.07 2.29.74 3.08.8 1.18-.24 2.31-.93 3.57-.84 1.51.12 2.65.72 3.4 1.8-3.12 1.87-2.38 5.98.48 7.13-.57 1.5-1.31 2.99-2.54 4.08l.01-.01zM12.03 7.25c-.15-2.23 1.66-4.07 3.74-4.25.29 2.58-2.34 4.5-3.74 4.25z"/></svg>
+          <div class="label"><span>Скачать</span><span class="platform">macOS · M1/M2/M3</span></div>
+        </a>
+        <a class="dl-btn secondary" id="btn-win" href="https://github.com/nnurlan1991/qaztribber2.0/releases/latest/download/QazTriber_1.0.0_x64-setup.exe">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M0 3.449L9.75 2.1v9.451H0m10.949-9.602L24 0v11.4H10.949M0 12.6h9.75v9.451L0 20.699M10.949 12.6H24V24l-12.9-1.801"/></svg>
+          <div class="label"><span>Скачать</span><span class="platform">Windows 10/11</span></div>
+        </a>
+        <a class="dl-btn secondary" id="btn-android" href="https://github.com/nnurlan1991/qaztribber2.0/releases/latest/download/QazTriber_1.0.0.apk">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M17.523 15.3414c-.5511 0-.9993-.4486-.9993-.9997s.4482-.9993.9993-.9993.9993.4483.9993.9993-.4482.9997-.9993.9997m-11.046 0c-.5511 0-.9993-.4486-.9993-.9997s.4483-.9993.9993-.9993.9993.4483.9993.9993-.4482.9997-.9993.9997m11.4045-6.02l1.9973-3.4592a.416.416 0 00-.1521-.5676.416.416 0 00-.5676.1521l-2.0223 3.503C15.5902 8.2439 13.8533 7.8508 12 7.8508s-3.5902.3931-5.1367 1.0989L4.841 5.4467a.4161.4161 0 00-.5677-.1521.4157.4157 0 00-.1521.5676l1.9973 3.4592C2.6889 11.1867.3432 14.6589 0 18.761h24c-.3432-4.1023-2.6889-7.5745-6.1185-9.4396"/></svg>
+          <div class="label"><span>Скачать</span><span class="platform">Android · APK</span></div>
+        </a>
+      </div>
+      <p class="dl-hint">Размер: ~200 МБ (Mac/Windows) · Модели скачиваются отдельно при первом запуске</p>
+    </section>
+
+    <section class="features">
+      <div class="feature">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#e6ca65" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5M2 12l10 5 10-5"/></svg></div>
+        <h3>Полностью офлайн</h3>
+        <p>Модели GigaAM работают локально. Аудио не покидает ваше устройство. Интернет нужен только для первой загрузки моделей.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#e6ca65" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M2 12h20M12 2a15.3 15.3 0 014 10 15.3 15.3 0 01-4 10 15.3 15.3 0 01-4-10 15.3 15.3 0 014-10z"/></svg></div>
+        <h3>Три языка</h3>
+        <p>Казахский, русский и смешанная речь (KZ+RU). Выбирайте язык записи для максимальной точности распознавания.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#e6ca65" stroke-width="2"><path d="M9 18V5l12-2v13"/><circle cx="6" cy="18" r="3"/><circle cx="18" cy="16" r="3"/></svg></div>
+        <h3>Запись и импорт</h3>
+        <p>Записывайте с микрофона или импортируйте WAV, MP3, M4A, FLAC. Редактируйте, копируйте и экспортируйте результат в TXT.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#e6ca65" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg></div>
+        <h3>Apple Silicon ускорение</h3>
+        <p>На Mac с M1/M2/M3/M4 используется Metal Performance Shaders — расшифровка в 3 раза быстрее. На Windows — CPU оптимизация.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#e6ca65" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 9h6v6H9z"/></svg></div>
+        <h3>Две модели</h3>
+        <p>Быстрая (220M) для черновиков и точная (600M) для максимального качества. Переключайтесь в один клик.</p>
+      </div>
+      <div class="feature">
+        <div class="feature-icon"><svg viewBox="0 0 24 24" fill="none" stroke="#e6ca65" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
+        <h3>Приватность</h3>
+        <p>Никаких аккаунтов, никаких облаков, никакой телеметрии. Ваши записи остаются только у вас.</p>
+      </div>
+    </section>
+
+    <section class="how">
+      <h2>Как это работает</h2>
+      <div class="steps">
+        <div class="step">
+          <div class="step-num">1</div>
+          <h4>Скачайте</h4>
+          <p>Установите приложение для вашей платформы</p>
+        </div>
+        <div class="step">
+          <div class="step-num">2</div>
+          <h4>Загрузите модели</h4>
+          <p>При первом запуске скачайте модели (~800 МБ). Это нужно один раз.</p>
+        </div>
+        <div class="step">
+          <div class="step-num">3</div>
+          <h4>Расшифровывайте</h4>
+          <p>Запишите или импортируйте аудио — текст появится через секунды</p>
+        </div>
+      </div>
+    </section>
+
+    <footer>
+      <p>QazTriber · GigaAM Multilingual · ONNX Runtime · <a href="https://github.com/nnurlan1991/qaztribber2.0">GitHub</a></p>
+      <p style="margin-top:8px; font-size:11px;">Поддержка: qaztribber.aidi-lab.kz</p>
+    </footer>
+  </div>
+
+  <script>
+    // Автоопределение ОС
+    (function() {
+      var ua = navigator.userAgent;
+      var mac = document.getElementById('btn-mac');
+      var win = document.getElementById('btn-win');
+      var android = document.getElementById('btn-android');
+      var detected = document.getElementById('detected');
+
+      // Замените на реальный GitHub repo URL
+      var GITHUB = 'https://github.com/nnurlan1991/qaztribber2.0/releases/latest/download';
+      mac.href = GITHUB + '/QazTriber_1.0.0_aarch64.dmg';
+      win.href = GITHUB + '/QazTriber_1.0.0_x64-setup.exe';
+      android.href = GITHUB + '/QazTriber_1.0.0.apk';
+
+      if (/Mac/i.test(ua)) {
+        detected.textContent = 'Мы определили: macOS';
+        mac.classList.remove('secondary');
+        win.classList.add('secondary');
+      } else if (/Windows/i.test(ua)) {
+        detected.textContent = 'Мы определили: Windows';
+        win.classList.remove('secondary');
+        mac.classList.add('secondary');
+      } else if (/Android/i.test(ua)) {
+        detected.textContent = 'Мы определили: Android';
+        android.classList.remove('secondary');
+        mac.classList.add('secondary');
+        win.classList.add('secondary');
+      }
+    })();
+  </script>
+</body>
+</html>

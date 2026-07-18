@@ -58,3 +58,17 @@ class PreloadResponse(BaseModel):
     progress: float = Field(ge=0, le=1)
     stage: str
     error: str | None = None
+
+
+class SystemInfoResponse(BaseModel):
+    device: str
+    cpu_count: int
+    cpu_brand: str
+    memory_gb: float
+    os: str
+    arch: str
+    #粗 бенчмарк: множитель скорости относительно реального времени
+    # 1.0 = транскрипция идёт 1:1 с длительностью аудио
+    # 0.4 = транскрипция в 2.5x быстрее реального времени
+    speed_multiplier_220m: float
+    speed_multiplier_600m: float
