@@ -192,7 +192,7 @@ export default function App() {
         ) : (
           <div className="audio-card">
             <div className="file-line"><strong>{file.name}</strong><button className="text-button" disabled={busy} onClick={reset}>Заменить</button></div>
-            {audioUrl && <audio controls src={audioUrl} onLoadedMetadata={(event) => { const value = event.currentTarget.duration; setDuration(value); setTrimEnd(value); }} />}
+            {audioUrl && <audio controls src={audioUrl} onLoadedMetadata={(event) => { const value = event.currentTarget.duration; if (Number.isFinite(value) && value > 0) { setDuration(value); setTrimEnd(value); } }} />}
             {duration > 0 && <div className="trim"><div><label>Начало <b>{formatTime(trimStart)}</b></label><input type="range" min="0" max={Math.max(0, trimEnd - 0.1)} step="0.1" value={trimStart} onChange={(event) => setTrimStart(Number(event.target.value))} /></div><div><label>Конец <b>{formatTime(trimEnd)}</b></label><input type="range" min={Math.min(duration, trimStart + 0.1)} max={duration} step="0.1" value={trimEnd} onChange={(event) => setTrimEnd(Number(event.target.value))} /></div></div>}
           </div>
         )}

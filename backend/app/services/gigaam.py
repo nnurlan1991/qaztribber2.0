@@ -13,6 +13,8 @@ import torch
 
 from .audio import ffmpeg_executable, merge_chunk_texts, split_wav
 
+MODEL_DOWNLOAD_BASE = "https://qaztribber.aidi-lab.kz/models/desktop"
+
 
 @dataclass(frozen=True)
 class ModelDefinition:
@@ -171,7 +173,7 @@ class GigaAMService:
                 target.unlink()
             temporary = target.with_suffix(".ckpt.part")
             temporary.unlink(missing_ok=True)
-            url = f"{gigaam._URL_DIR}/{definition.gigaam_name}.ckpt"
+            url = f"{MODEL_DOWNLOAD_BASE}/{definition.gigaam_name}.ckpt"
             report(f"Подключение к серверу GigaAM {definition.parameters}…", 0.0)
             try:
                 with urllib.request.urlopen(url, timeout=60) as response, temporary.open("wb") as output:

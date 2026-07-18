@@ -1,10 +1,5 @@
-"""Нативный лаунчер: поднимает локальный API и открывает браузер."""
+"""Tauri sidecar: поднимает локальный API. Окно открывает Tauri."""
 from __future__ import annotations
-
-import socket
-import threading
-import time
-import webbrowser
 
 import uvicorn
 
@@ -14,23 +9,11 @@ HOST = "127.0.0.1"
 PORT = 8765
 
 
-def server_is_ready() -> bool:
-    try:
-        with socket.create_connection((HOST, PORT), timeout=0.25):
-            return True
-    except OSError:
-        return False
-
-
 def main() -> None:
-    if server_is_ready():
-        webbrowser.open(f"http://{HOST}:{PORT}")
-        return
-
     # PyInstaller запускает Windows-версию без консоли: sys.stdout/sys.stderr
     # могут быть None. Стандартный цветной логгер Uvicorn вызывает isatty() и
-    # из-за этого падает ещё до старта сервера. Логи для локального лаунчера
-    # не нужны, поэтому полностью отключаем его конфигурацию.
+    # из-за этого падает ещё до старта сервера. Логи для sidecar не нужны,
+    # поэтому полностью отключаем его конфигурацию.
     config = uvicorn.Config(
         app,
         host=HOST,
@@ -39,16 +22,8 @@ def main() -> None:
         access_log=False,
     )
     server = uvicorn.Server(config)
-    thread = threading.Thread(target=server.run, name="qaztriber-local-server", daemon=True)
-    thread.start()
-
-    for _ in range(80):
-        if server_is_ready():
-            webbrowser.open(f"http://{HOST}:{PORT}")
-            break
-        time.sleep(0.1)
-
-    thread.join()
+    # Главный поток — процесс живёт, пока Tauri не завершит его.
+    server.run()
 
 
 if __name__ == "__main__":
