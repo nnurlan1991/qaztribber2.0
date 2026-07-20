@@ -1,12 +1,41 @@
+import { useEffect, useState } from "react";
 import { useApp } from "../store";
 import { LANGS } from "../i18n";
 import { Icon } from "../icons";
 import { Logo } from "../Logo";
+import { getLogs, type LogEntry } from "../api";
 
 const APP_VERSION = "1.0.0";
 
 export function SettingsView() {
   const { t, lang, setLang, prefs, setPrefs, models } = useApp();
+
+  const [logs, setLogs] = useState<LogEntry[]>([]);
+  const [logLevel, setLogLevel] = useState<string>("INFO");
+  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [loadingLogs, setLoadingLogs] = useState(false);
+
+  async function fetchLogs() {
+    setLoadingLogs(true);
+    try {
+      const entries = await getLogs(100, logLevel);
+      setLogs(entries);
+    } catch {
+      setLogs([]);
+    } finally {
+      setLoadingLogs(false);
+    }
+  }
+
+  useEffect(() => {
+    fetchLogs();
+  }, [logLevel]);
+
+  useEffect(() => {
+    if (!autoRefresh) return;
+    const interval = setInterval(fetchLogs, 5000);
+    return () => clearInterval(interval);
+  }, [autoRefresh, logLevel]);
 
   const themes: { id: "light" | "dark" | "system"; labelKey: string; icon: string }[] = [
     { id: "dark", labelKey: "settings.theme.dark", icon: "dark_mode" },
@@ -69,13 +98,48 @@ export function SettingsView() {
       </section>
 
       {/* Links */}
-      <section className="card pad">
+      <section className="card pad mb-6">
         <div className="row-flex gap-3 mb-4"><Icon name="globe" size={22} /><h2 className="h2">{t("settings.links")}</h2></div>
         <a className="row" href="https://qaztribber.aidi-lab.kz" target="_blank" rel="noreferrer">
           <span className="row-icon"><Icon name="language" size={18} /></span>
           <div className="row-body"><div className="row-title">{t("settings.website")}</div><div className="row-preview">qaztribber.aidi-lab.kz</div></div>
           <Icon name="open_in_new" size={18} />
         </a>
+      </section>
+
+      {/* Debug Panel */}
+      <section className="card pad mb-6">
+        <div className="row-flex between mb-4">
+          <h2 className="h3">{t("settings.debug")}</h2>
+          <div className="row-flex gap-2">
+            <select className="input sm" value={logLevel} onChange={(e) => setLogLevel(e.target.value)} style={{ width: 120 }}>
+              <option value="ALL">ALL</option>
+              <option value="INFO">INFO</option>
+              <option value="WARNING">WARNING</option>
+              <option value="ERROR">ERROR</option>
+            </select>
+            <button className="btn btn-soft sm" onClick={fetchLogs} disabled={loadingLogs}>
+              <Icon name="refresh" size={16} />{t("settings.refresh")}
+            </button>
+            <label className="row-flex gap-1" style={{ fontSize: 13 }}>
+              <input type="checkbox" checked={autoRefresh} onChange={(e) => setAutoRefresh(e.target.checked)} />
+              {t("settings.autoRefresh")}
+            </label>
+          </div>
+        </div>
+        <div className="log-panel" style={{ maxHeight: 400, overflow: "auto", background: "var(--bg-elev, rgba(0,0,0,0.2))", borderRadius: 8, padding: 12 }}>
+          {logs.length === 0 ? (
+            <div className="faint" style={{ textAlign: "center", padding: 20 }}>{t("settings.noLogs")}</div>
+          ) : (
+            logs.map((entry, i) => (
+              <div key={i} className="log-entry" style={{ fontFamily: "var(--font-mono, monospace)", fontSize: 12, marginBottom: 4, display: "flex", gap: 8 }}>
+                <span className="faint" style={{ minWidth: 80 }}>{entry.timestamp}</span>
+                <span style={{ minWidth: 60, color: entry.level === "ERROR" ? "var(--status-error, #ef4444)" : entry.level === "WARNING" ? "var(--status-warn, #f59e0b)" : "var(--text-muted, inherit)" }}>{entry.level}</span>
+                <span style={{ flex: 1, wordBreak: "break-word" }}>{entry.message}</span>
+              </div>
+            ))
+          )}
+        </div>
       </section>
     </div>
   );

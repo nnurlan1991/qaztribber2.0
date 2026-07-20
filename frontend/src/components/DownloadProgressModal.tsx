@@ -234,6 +234,25 @@ export function DownloadProgressModal({ onClose }: DownloadProgressModalProps) {
           </div>
         )}
 
+        {/* Insufficient disk space warning */}
+        {preload?.error_code === "insufficient_disk_space" && (
+          <div style={{
+            display: "flex",
+            alignItems: "center",
+            gap: "var(--sp-2)",
+            padding: "var(--sp-3) var(--sp-4)",
+            borderRadius: "var(--r-md)",
+            background: "var(--status-err-bg, rgba(239, 68, 68, 0.1))",
+            border: "1px solid var(--status-err, #ef4444)",
+            marginBottom: "var(--sp-4)",
+            fontSize: 13,
+            color: "var(--status-err, #ef4444)",
+          }}>
+            <Icon name="error" size={18} />
+            <span>{t("download.insufficientDiskSpace")}</span>
+          </div>
+        )}
+
         {/* Actions */}
         <div style={{ display: "flex", justifyContent: "flex-end", gap: "var(--sp-2)", marginTop: "var(--sp-2)" }}>
           {showCancelConfirm ? (

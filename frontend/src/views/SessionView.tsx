@@ -7,6 +7,7 @@ import { ProgressBar } from "../components/ProgressBar";
 import { StatusBadge } from "../components/StatusBadge";
 import { Waveform } from "../components/Waveform";
 import { formatDate, formatTime, sourceIcon } from "../storage";
+import { notifyJobComplete } from "../notifications";
 
 export function SessionView() {
   const { t, lang, currentSessionId, sessions, patchSession, removeSessions, navigate } = useApp();
@@ -43,6 +44,15 @@ export function SessionView() {
           progress: job.progress,
           stage: job.stages?.find((s) => s.status === "in_progress")?.detail ?? session.stage,
         });
+
+        // Fire notification on terminal status
+        if (job.status === "completed" || job.status === "failed") {
+          notifyJobComplete(
+            job.id, job.status,
+            job.status === "completed" ? t("notif.completedTitle") : t("notif.failedTitle"),
+            job.status === "completed" ? t("notif.completedBody") : t("notif.failedBody"),
+          );
+        }
 
         // If completed, fetch result text
         if (job.status === "completed") {

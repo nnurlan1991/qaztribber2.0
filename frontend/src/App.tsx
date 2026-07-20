@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { AppProvider, useApp } from "./store";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -41,10 +42,13 @@ function ViewRouter() {
   }
 }
 
+type SidecarStatus = "connected" | "restarting" | "unreachable" | "failed";
+
 function Shell() {
+  const [sidecarStatus, setSidecarStatus] = useState<SidecarStatus | null>(null);
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
-  const { setError, preload } = useApp();
+  const { setError, preload, t } = useApp();
 
   useEffect(() => {
     isFirstLaunch()
@@ -54,6 +58,23 @@ function Shell() {
       .catch(() => {
         // Silently ignore — onboarding is not critical
       });
+  }, []);
+
+  useEffect(() => {
+    let unlisten: (() => void) | null = null;
+
+    listen("sidecar-status", (event: { payload: string }) => {
+      const status = event.payload as SidecarStatus;
+      setSidecarStatus(status);
+    }).then((fn) => {
+      unlisten = fn;
+    }).catch(() => {
+      // Not in Tauri context (dev browser) — ignore
+    });
+
+    return () => {
+      if (unlisten) unlisten();
+    };
   }, []);
 
   const handleDownloadModels = useCallback(async () => {
@@ -78,8 +99,50 @@ function Shell() {
 
   return (
     <div className="app">
+      {/* Sidecar status banner */}
+      {sidecarStatus && sidecarStatus !== "connected" && (
+        <div
+          className={`sidecar-banner sidecar-banner-${sidecarStatus}`}
+          style={{
+            position: "fixed",
+            top: 0,
+            left: 0,
+            right: 0,
+            zIndex: 1000,
+            padding: "8px 16px",
+            display: "flex",
+            alignItems: "center",
+            justifyContent: "center",
+            gap: 8,
+            fontSize: 14,
+            fontWeight: 500,
+            background: sidecarStatus === "restarting"
+              ? "rgba(247, 189, 72, 0.15)"
+              : "rgba(239, 68, 68, 0.15)",
+            color: sidecarStatus === "restarting"
+              ? "var(--status-warn, #f59e0b)"
+              : "var(--status-error, #ef4444)",
+            borderBottom: `1px solid ${
+              sidecarStatus === "restarting"
+                ? "rgba(247, 189, 72, 0.3)"
+                : "rgba(239, 68, 68, 0.3)"
+            }`,
+            backdropFilter: "blur(8px)",
+          }}
+        >
+          {sidecarStatus === "restarting" && <span className="spinner" style={{ width: 14, height: 14 }} />}
+          <span>
+            {sidecarStatus === "restarting" && t("sidecar.restarting")}
+            {sidecarStatus === "unreachable" && t("sidecar.unreachable")}
+            {sidecarStatus === "failed" && t("sidecar.failed")}
+          </span>
+        </div>
+      )}
       <Sidebar />
-      <main className="main">
+      <main
+        className="main"
+        style={{ paddingTop: sidecarStatus && sidecarStatus !== "connected" ? 40 : 0 }}
+      >
         <TopBar onOpenDownloadModal={() => setShowDownloadModal(true)} />
         <ViewRouter />
       </main>

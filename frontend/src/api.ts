@@ -1,3 +1,9 @@
+export type LogEntry = {
+  timestamp: string;
+  level: string;
+  message: string;
+};
+
 export type Model = {
   id: "220m" | "600m";
   title: string;
@@ -67,6 +73,20 @@ export const isFirstLaunch = () => request<{ first_launch: boolean }>("/api/firs
 export const markInitialized = () => request<{ initialized: boolean }>("/api/first-launch/initialize", { method: "POST" });
 export const cancelPreload = () => request<Preload>("/api/models/preload/cancel", { method: "POST" });
 export const getJob = (jobId: string) => request<Job>(`/api/transcriptions/${jobId}`);
+const LOG_LINE_RE = /^(\S+)\s+\[(DEBUG|INFO|WARNING|ERROR|CRITICAL)\]\s+(.*)$/;
+
+function parseLogLine(line: string): LogEntry {
+  const m = LOG_LINE_RE.exec(line);
+  if (m) return { timestamp: m[1], level: m[2], message: m[3] };
+  return { timestamp: "", level: "INFO", message: line };
+}
+
+export const getLogs = async (tail = 100, level = "INFO"): Promise<LogEntry[]> => {
+  const data = await request<{ lines: string[]; total_in_file: number; returned: number }>(
+    `/api/logs?tail=${tail}&level=${level}`
+  );
+  return data.lines.map(parseLogLine);
+};
 
 export async function createJob(file: File, model: Model["id"], expectedLanguage: Job["expected_language"], start: number, end: number): Promise<Job> {
   const form = new FormData();

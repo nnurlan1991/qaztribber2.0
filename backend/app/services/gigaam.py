@@ -5,6 +5,7 @@ import hashlib
 import json
 import logging
 import os
+import shutil
 import socket
 import threading
 import time
@@ -187,7 +188,9 @@ class ModelPreloadManager:
                 self.status = "failed"
                 self.error = str(error)
                 error_lower = str(error).lower()
-                if "checksum" in error_lower or "контрольная сумма" in error_lower:
+                if "insufficient_disk_space" in error_lower:
+                    self.error_code = "insufficient_disk_space"
+                elif "checksum" in error_lower or "контрольная сумма" in error_lower:
                     self.error_code = "checksum_mismatch"
                 elif "download" in error_lower or "timeout" in error_lower or "url" in error_lower:
                     self.error_code = "model_download_failed"
@@ -273,6 +276,7 @@ class GigaAMService:
             definition = MODELS[model_id]
             target = self.model_path(model_id)
             self.models_dir.mkdir(parents=True, exist_ok=True)
+
             import gigaam
 
             expected_hash = gigaam._MODEL_HASHES[definition.gigaam_name]
@@ -281,6 +285,22 @@ class GigaAMService:
                 return
             if target.exists():
                 target.unlink()
+
+            # Check disk space before download (only runs when model is NOT cached)
+            model_size_bytes = 2_500_000_000  # Conservative estimate: 2.5GB (largest model is 600M at ~2.3GB)
+            try:
+                disk_usage = shutil.disk_usage(str(self.models_dir))
+                if disk_usage.free < model_size_bytes * 2:  # Require 2x model size for safety
+                    free_gb = disk_usage.free / (1024 ** 3)
+                    required_gb = (model_size_bytes * 2) / (1024 ** 3)
+                    raise RuntimeError(
+                        f"insufficient_disk_space: free={free_gb:.1f}GB, required={required_gb:.1f}GB"
+                    )
+            except RuntimeError:
+                raise
+            except Exception:
+                # If disk check fails, proceed with download (don't block on check failure)
+                pass
             temporary = target.with_suffix(".ckpt.part")
             url = f"{MODEL_DOWNLOAD_BASE}/{definition.gigaam_name}.ckpt"
 

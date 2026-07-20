@@ -163,6 +163,10 @@ const ru: Dict = {
   "settings.links": "Ссылки",
   "settings.website": "Сайт",
   "settings.documentation": "Документация",
+  "settings.debug": "Отладка",
+  "settings.refresh": "Обновить",
+  "settings.autoRefresh": "Авто",
+  "settings.noLogs": "Нет записей",
 
   // Common
   "common.close": "Закрыть",
@@ -216,6 +220,7 @@ const ru: Dict = {
   "download.completed": "Загрузка завершена",
   "download.failed": "Ошибка загрузки",
   "download.cancelled": "Загрузка отменена",
+  "download.insufficientDiskSpace": "Недостаточно места на диске для загрузки модели",
 
   // Onboarding
   "onboarding.title": "Добро пожаловать в QazTriber",
@@ -251,6 +256,17 @@ const ru: Dict = {
 
   // Home
   "home.cancellingAfterLoad": "Отменяется после загрузки…",
+
+  // Notifications
+  "notif.completedTitle": "QazTriber: расшифровка готова",
+  "notif.completedBody": "Процесс завершён успешно",
+  "notif.failedTitle": "QazTriber: ошибка расшифровки",
+  "notif.failedBody": "Проверьте логи в настройках",
+
+  // Sidecar
+  "sidecar.restarting": "Backend перезапускается...",
+  "sidecar.unreachable": "Backend недоступен — переподключение",
+  "sidecar.failed": "Backend не запустился",
 };
 
 const kz: Dict = {
@@ -395,6 +411,10 @@ const kz: Dict = {
   "settings.links": "Сілтемелер",
   "settings.website": "Сайт",
   "settings.documentation": "Құжаттама",
+  "settings.debug": "Жөндеу",
+  "settings.refresh": "Жаңарту",
+  "settings.autoRefresh": "Авто",
+  "settings.noLogs": "Жазбалар жоқ",
 
   "common.close": "Жабу",
   "common.cancel": "Бас тарту",
@@ -446,6 +466,7 @@ const kz: Dict = {
   "download.completed": "Жүктеу аяқталды",
   "download.failed": "Жүктеу қатесі",
   "download.cancelled": "Жүктеу тоқтатылды",
+  "download.insufficientDiskSpace": "Модельді жүктеу үшін дискіде орын жеткіліксіз",
 
   // Onboarding
   "onboarding.title": "QazTriber-ге қош келдіңіз",
@@ -481,6 +502,17 @@ const kz: Dict = {
 
   // Home
   "home.cancellingAfterLoad": "Жүктеуден кейін тоқтатылуда…",
+
+  // Notifications
+  "notif.completedTitle": "QazTriber: түсірілім дайын",
+  "notif.completedBody": "Процесс сәтті аяқталды",
+  "notif.failedTitle": "QazTriber: түсірілім қатесі",
+  "notif.failedBody": "Параметрлердегі логтарды тексеріңіз",
+
+  // Sidecar
+  "sidecar.restarting": "Backend қайта іске қосылып жатыр...",
+  "sidecar.unreachable": "Backend қолжетімсіз — қайта қосылу",
+  "sidecar.failed": "Backend іске қосылмады",
 };
 
 const dicts: Record<Lang, Dict> = { ru, kz };

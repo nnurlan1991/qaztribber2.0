@@ -7,6 +7,7 @@ import { StatusBadge } from "../components/StatusBadge";
 import { ModelDownloadDialog } from "../components/ModelDownloadDialog";
 import { ModelLoadWarning } from "../components/ModelLoadWarning";
 import { formatTime, sourceIcon, type SourceType } from "../storage";
+import { notifyJobComplete, requestNotificationPermission } from "../notifications";
 import type { Job, Model } from "../api";
 
 const terminalStatuses = new Set<Job["status"]>(["completed", "failed", "cancelled"]);
@@ -35,6 +36,7 @@ export function HomeView() {
   const pendingModel = useRef<Model["id"] | null>(null);
   const [showModelLoadWarning, setShowModelLoadWarning] = useState(false);
   const cancelRequestedRef = useRef(false);
+  const notifiedJobs = useRef<Set<string>>(new Set());
 
   // Sync from TopBar model toggle
   useEffect(() => { setSelectedModel(prefs.defaultModel); }, [prefs.defaultModel]);
@@ -44,6 +46,14 @@ export function HomeView() {
     return watchJob(
       job.id,
       (next) => {
+        if ((next.status === "completed" || next.status === "failed") && !notifiedJobs.current.has(next.id)) {
+          notifiedJobs.current.add(next.id);
+          notifyJobComplete(
+            next.id, next.status,
+            next.status === "completed" ? t("notif.completedTitle") : t("notif.failedTitle"),
+            next.status === "completed" ? t("notif.completedBody") : t("notif.failedBody"),
+          );
+        }
         setJob(next);
         patchSession(next.id, { status: next.status, progress: next.progress, stage: next.stage, errorMessage: next.error });
       },
@@ -136,6 +146,9 @@ export function HomeView() {
 
   async function run(modelOverride?: Model["id"]) {
     if (!file) return;
+
+    // Request notification permission early so user sees prompt while at the app
+    requestNotificationPermission().catch(() => {});
 
     const modelId = modelOverride ?? selectedModel;
 
