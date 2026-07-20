@@ -9,19 +9,28 @@ export type Model = {
   size_bytes: number;
 };
 
+export type StageStatus = {
+  name: "audio_preparation" | "model_download" | "model_load" | "transcription" | "merging" | "done";
+  status: "pending" | "in_progress" | "completed" | "failed";
+  progress: number;
+  detail: string;
+};
+
 export type Job = {
   id: string;
   status: "queued" | "preparing" | "loading_model" | "transcribing" | "completed" | "failed" | "cancelled";
   progress: number;
   stage: string;
   error: string | null;
+  error_code: string | null;
   model: "220m" | "600m";
   expected_language: "kazakh" | "russian" | "mixed";
   filename: string;
+  stages: StageStatus[];
 };
 
 export type Result = { id: string; text: string; model: "220m" | "600m"; expected_language: "kazakh" | "russian" | "mixed"; duration_seconds: number | null };
-export type Preload = { status: "idle" | "downloading" | "completed" | "failed" | "cancelled" | "paused"; progress: number; stage: string; error: string | null };
+export type Preload = { status: "idle" | "downloading" | "completed" | "failed" | "cancelled" | "paused"; progress: number; stage: string; error: string | null; error_code: string | null };
 
 export type SystemInfo = {
   device: string;

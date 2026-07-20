@@ -186,7 +186,16 @@ const ru: Dict = {
   "error.preload": "Не удалось начать загрузку моделей.",
   "error.modelDelete": "Не удалось удалить модель.",
   "error.transcribe": "Не удалось обработать аудио.",
-  "error.cancelled": "Задача отменена. Исходный файл остаётся выбранным.",
+
+  // Error codes (machine-readable, mapped from error_code field)
+  "error.model_download_failed": "Ошибка загрузки модели",
+  "error.ffmpeg_missing": "FFmpeg не найден",
+  "error.checksum_mismatch": "Файл модели повреждён",
+  "error.transcription_timeout": "Таймаут расшифровки",
+  "error.model_load_failed": "Ошибка загрузки модели в память",
+  "error.audio_preparation_failed": "Ошибка обработки аудио",
+  "error.cancelled": "Операция отменена",
+  "error.unknown_error": "Неизвестная ошибка",
 
   // Download
   "download.title": "Загрузка моделей",
@@ -211,12 +220,30 @@ const ru: Dict = {
   "onboarding.model220mDesc": "Для повседневной расшифровки",
   "onboarding.model600mDesc": "Для максимального качества",
 
+  // Stage names
+  "stage.audio_preparation": "Подготовка аудио",
+  "stage.model_download": "Скачивание модели",
+  "stage.model_load": "Загрузка модели",
+  "stage.transcription": "Распознавание",
+  "stage.merging": "Объединение",
+  "stage.done": "Готово",
+  "stage.eta": "Осталось ~{seconds}с",
+  "stage.elapsed": "{seconds}с",
+
   // Model Download Dialog
   "modelDialog.title": "Модель не готова",
   "modelDialog.message": "Выбранная модель ({model}) ещё не скачана. Скачать сейчас?",
   "modelDialog.download220m": "Скачать 220M (быстрая, ~880 МБ)",
   "modelDialog.download600m": "Скачать 600M (точная, ~2.3 ГБ)",
   "modelDialog.cancel": "Отмена",
+
+  // Model Load Warning
+  "modelLoadWarning.title": "Загрузка модели",
+  "modelLoadWarning.message": "Загрузку модели нельзя прервать безопасно. Операция завершится через ~{seconds}с, после чего будет отменена.",
+  "modelLoadWarning.ok": "Понятно",
+
+  // Home
+  "home.cancellingAfterLoad": "Отменяется после загрузки…",
 };
 
 const kz: Dict = {
@@ -382,7 +409,16 @@ const kz: Dict = {
   "error.preload": "Модельдерді жүктеуді бастау сәтсіз.",
   "error.modelDelete": "Модельді жою сәтсіз.",
   "error.transcribe": "Аудио өңдеу сәтсіз.",
-  "error.cancelled": "Тапсырмадан бас тартылды. Бастапқы файл таңдалып қалды.",
+
+  // Error codes (machine-readable, mapped from error_code field)
+  "error.model_download_failed": "Модельді жүктеу қатесі",
+  "error.ffmpeg_missing": "FFmpeg табылмады",
+  "error.checksum_mismatch": "Модель файлы бұзылған",
+  "error.transcription_timeout": "Тану уақыты аяқталды",
+  "error.model_load_failed": "Модельді жадқа жүктеу қатесі",
+  "error.audio_preparation_failed": "Аудио өңдеу қатесі",
+  "error.cancelled": "Операция тоқтатылды",
+  "error.unknown_error": "Белгісіз қате",
 
   // Download
   "download.title": "Модельдерді жүктеу",
@@ -407,12 +443,30 @@ const kz: Dict = {
   "onboarding.model220mDesc": "Күнделікті тану үшін",
   "onboarding.model600mDesc": "Максималды сапа үшін",
 
+  // Stage names
+  "stage.audio_preparation": "Аудио дайындау",
+  "stage.model_download": "Модельді жүктеу",
+  "stage.model_load": "Модельді жүктеу (жад)",
+  "stage.transcription": "Тану",
+  "stage.merging": "Біріктіру",
+  "stage.done": "Дайын",
+  "stage.eta": "Қалды ~{seconds}с",
+  "stage.elapsed": "{seconds}с",
+
   // Model Download Dialog
   "modelDialog.title": "Модель дайын емес",
   "modelDialog.message": "Таңдалған модель ({model}) әлі жүктелмеген. Қазір жүктеу керек пе?",
   "modelDialog.download220m": "220M жүктеу (жылдам, ~880 МБ)",
   "modelDialog.download600m": "600M жүктеу (дәл, ~2.3 ГБ)",
   "modelDialog.cancel": "Бас тарту",
+
+  // Model Load Warning
+  "modelLoadWarning.title": "Модельді жүктеу",
+  "modelLoadWarning.message": "Модельді жүктеуді қауіпсіз тоқтату мүмкін емес. Операция ~{seconds}с ішінде аяқталып, содан кейін тоқтатылады.",
+  "modelLoadWarning.ok": "Түсіндім",
+
+  // Home
+  "home.cancellingAfterLoad": "Жүктеуден кейін тоқтатылуда…",
 };
 
 const dicts: Record<Lang, Dict> = { ru, kz };

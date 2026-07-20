@@ -72,6 +72,7 @@ def test_cancel_sets_event_and_updates_status_when_downloading(
     assert mgr._cancelled.is_set()
     assert snapshot["status"] == "cancelled"
     assert "Загрузка отменена пользователем" in str(snapshot["stage"])
+    assert snapshot["error_code"] == "cancelled"
 
 
 def test_cancel_sets_event_but_keeps_status_when_idle(
@@ -270,12 +271,14 @@ def test_persist_status_records_error(gigaam_service: GigaAMService, tmp_path: P
         mgr.progress = 0.3
         mgr.stage = "Ошибка загрузки"
         mgr.error = "Connection refused"
+        mgr.error_code = "model_download_failed"
 
         mgr._persist_status()
 
         data = json.loads(downloads_path.read_text(encoding="utf-8"))
         assert data["status"] == "failed"
         assert data["error"] == "Connection refused"
+        assert data["error_code"] == "model_download_failed"
 
 
 def test_persist_status_completed(gigaam_service: GigaAMService, tmp_path: Path) -> None:
@@ -393,6 +396,7 @@ def test_restore_status_cancelled_is_preserved(gigaam_service: GigaAMService, tm
             "progress": 0.22,
             "stage": "Отменено",
             "error": None,
+            "error_code": "cancelled",
             "timestamp": time.time(),
         }, ensure_ascii=False),
         encoding="utf-8",
@@ -405,6 +409,7 @@ def test_restore_status_cancelled_is_preserved(gigaam_service: GigaAMService, tm
         assert mgr.status == "cancelled"
         assert mgr.progress == 0.22
         assert mgr.stage == "Отменено"
+        assert mgr.error_code == "cancelled"
 
 
 def test_restore_status_no_file_defaults_to_idle(gigaam_service: GigaAMService, tmp_path: Path) -> None:
@@ -634,6 +639,7 @@ def test_snapshot_includes_all_fields(gigaam_service: GigaAMService) -> None:
     mgr.progress = 0.42
     mgr.stage = "Скачивание 220M: 500 МБ / 880 МБ"
     mgr.error = None
+    mgr.error_code = None  # reset in case _restore_status loaded stale value
 
     snap = mgr.snapshot()
 
@@ -641,6 +647,8 @@ def test_snapshot_includes_all_fields(gigaam_service: GigaAMService) -> None:
     assert "progress" in snap
     assert "stage" in snap
     assert "error" in snap
+    assert "error_code" in snap
     assert snap["status"] == "downloading"
     assert snap["progress"] == 0.42
     assert snap["error"] is None
+    assert snap["error_code"] is None

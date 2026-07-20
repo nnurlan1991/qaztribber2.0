@@ -36,15 +36,24 @@ class ModelResponse(BaseModel):
     size_bytes: int = Field(ge=0)
 
 
+class StageStatus(BaseModel):
+    name: str  # "audio_preparation" | "model_download" | "model_load" | "transcription" | "merging" | "done"
+    status: Literal["pending", "in_progress", "completed", "failed"]
+    progress: float = Field(ge=0, le=1, default=0.0)
+    detail: str = ""
+
+
 class JobResponse(BaseModel):
     id: str
     status: JobStatus
     progress: float = Field(ge=0, le=1)
     stage: str
     error: str | None = None
+    error_code: str | None = None
     model: Literal["220m", "600m"]
     expected_language: Literal["kazakh", "russian", "mixed"]
     filename: str
+    stages: list[StageStatus] = Field(default_factory=list)
 
 
 class ResultResponse(BaseModel):
@@ -60,6 +69,7 @@ class PreloadResponse(BaseModel):
     progress: float = Field(ge=0, le=1)
     stage: str
     error: str | None = None
+    error_code: str | None = None
 
 
 class SessionResponse(BaseModel):

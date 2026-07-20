@@ -12,6 +12,10 @@ class Settings:
     host: str = os.getenv("QAZTRIBER_HOST", "127.0.0.1")
     port: int = int(os.getenv("QAZTRIBER_PORT", "8000"))
     max_upload_bytes: int = int(os.getenv("QAZTRIBER_MAX_UPLOAD_BYTES", str(1024 * 1024 * 1024)))
+    # Timeout in seconds if no chunk progress during transcription.
+    # Valid range: 300–3600 (5 min – 1 hour). Default 600s (10 min).
+    transcription_timeout: int = int(os.getenv("QAZTRIBER_TRANSCRIPTION_TIMEOUT", "600"))
+
     @property
     def app_data_dir(self) -> Path:
         """Папка данных, принятая для каждой настольной ОС.

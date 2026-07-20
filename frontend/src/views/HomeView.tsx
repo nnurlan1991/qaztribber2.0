@@ -5,6 +5,7 @@ import { Icon } from "../icons";
 import { ProgressBar } from "../components/ProgressBar";
 import { StatusBadge } from "../components/StatusBadge";
 import { ModelDownloadDialog } from "../components/ModelDownloadDialog";
+import { ModelLoadWarning } from "../components/ModelLoadWarning";
 import { formatTime, sourceIcon, type SourceType } from "../storage";
 import type { Job, Model } from "../api";
 
@@ -32,6 +33,8 @@ export function HomeView() {
   const [showModelDialog, setShowModelDialog] = useState(false);
   const [pendingRun, setPendingRun] = useState(false);
   const pendingModel = useRef<Model["id"] | null>(null);
+  const [showModelLoadWarning, setShowModelLoadWarning] = useState(false);
+  const cancelRequestedRef = useRef(false);
 
   // Sync from TopBar model toggle
   useEffect(() => { setSelectedModel(prefs.defaultModel); }, [prefs.defaultModel]);
@@ -94,7 +97,7 @@ export function HomeView() {
     setFile(nextFile);
     setAudioUrl(URL.createObjectURL(nextFile));
     setDuration(0);
-    setJob(null); setResult(null); setError(null);
+    setJob(null); setResult(null); setError(null); cancelRequestedRef.current = false;
     setSourceType(source);
   }
 
@@ -159,6 +162,19 @@ export function HomeView() {
 
   async function cancel() {
     if (!job) return;
+    // During model_load stage, show warning instead of immediate cancel
+    if (job.status === "loading_model") {
+      setShowModelLoadWarning(true);
+      cancelRequestedRef.current = true;
+      try {
+        await cancelJob(job.id);
+      } catch (reason) {
+        cancelRequestedRef.current = false;
+        setShowModelLoadWarning(false);
+        setError(reason instanceof Error ? reason.message : t("error.cancel"));
+      }
+      return;
+    }
     try { setJob(await cancelJob(job.id)); } catch (reason) { setError(reason instanceof Error ? reason.message : t("error.cancel")); }
   }
 
@@ -167,6 +183,7 @@ export function HomeView() {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
     setFile(null); setAudioUrl(null); setDuration(0);
     setJob(null); setResult(null); setError(null);
+    cancelRequestedRef.current = false;
   }
 
   async function copyText() {
@@ -245,7 +262,11 @@ export function HomeView() {
         {/* ЗОНА C: расшифровать */}
         <div className="hero-zone hero-zone-c">
           <div className="toolbar-row">
-            {busy && <button className="btn btn-danger" onClick={cancel}><Icon name="cancel" size={16} />{t("home.cancel")}</button>}
+            {busy && (job?.status === "loading_model" && cancelRequestedRef.current ? (
+              <button className="btn btn-danger" disabled style={{ opacity: 0.5, cursor: "not-allowed" }}><Icon name="autorenew" size={16} />{t("home.cancellingAfterLoad")}</button>
+            ) : (
+              <button className="btn btn-danger" onClick={cancel}><Icon name="cancel" size={16} />{t("home.cancel")}</button>
+            ))}
             <button className="btn btn-gold" disabled={!canRun} onClick={() => run()}>
               <Icon name="bolt" size={16} fill />
               {busy ? t("home.transcribing") : `${t("home.transcribe")} · ${selected?.parameters ?? "…"}`}
@@ -367,6 +388,13 @@ export function HomeView() {
           modelName={selected?.parameters ?? selectedModel}
           onDownload={handleDownloadForTranscribe}
           onCancel={() => { setShowModelDialog(false); setPendingRun(false); }}
+        />
+      )}
+
+      {showModelLoadWarning && (
+        <ModelLoadWarning
+          onClose={() => setShowModelLoadWarning(false)}
+          estimatedSeconds={30}
         />
       )}
     </div>

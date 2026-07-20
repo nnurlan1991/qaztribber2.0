@@ -31,9 +31,16 @@ def job_response(job: Job) -> JobResponse:
         progress=job.progress,
         stage=job.stage,
         error=job.error,
+        error_code=job.error_code,
         model=job.model,  # type: ignore[arg-type]
         expected_language=job.expected_language,  # type: ignore[arg-type]
         filename=job.filename,
+        stages=[{
+            "name": s["name"],
+            "status": s["status"],
+            "progress": s["progress"],
+            "detail": s["detail"],
+        } for s in job.stages],
     )
 
 

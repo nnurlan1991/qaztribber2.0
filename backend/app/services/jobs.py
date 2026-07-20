@@ -9,9 +9,20 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Callable
 
+from ..config import settings
 from ..schemas import JobStatus
 from .audio import run_ffmpeg, wav_duration_seconds
 from .gigaam import GigaAMService
+
+
+_DEFAULT_STAGES: list[dict] = [
+    {"name": "audio_preparation", "status": "pending", "progress": 0.0, "detail": ""},
+    {"name": "model_download", "status": "pending", "progress": 0.0, "detail": ""},
+    {"name": "model_load", "status": "pending", "progress": 0.0, "detail": ""},
+    {"name": "transcription", "status": "pending", "progress": 0.0, "detail": ""},
+    {"name": "merging", "status": "pending", "progress": 0.0, "detail": ""},
+    {"name": "done", "status": "pending", "progress": 0.0, "detail": ""},
+]
 
 
 @dataclass
@@ -28,17 +39,31 @@ class Job:
     progress: float = 0.0
     stage: str = "В очереди"
     error: str | None = None
+    error_code: str | None = None
     text: str | None = None
     duration_seconds: float | None = None
     cancelled: bool = False
+    last_progress_time: float = 0.0
     revision: int = 0
     condition: threading.Condition = field(default_factory=lambda: threading.Condition(threading.RLock()))
+    stages: list[dict] = field(default_factory=lambda: [dict(s) for s in _DEFAULT_STAGES])
 
     def update(self, status: JobStatus, stage: str, progress: float) -> None:
         with self.condition:
             self.status = status
             self.stage = stage
             self.progress = max(0.0, min(1.0, progress))
+            self.revision += 1
+            self.condition.notify_all()
+
+    def update_stage(self, name: str, status: str, progress: float, detail: str = "") -> None:
+        with self.condition:
+            for stage in self.stages:
+                if stage["name"] == name:
+                    stage["status"] = status
+                    stage["progress"] = max(0.0, min(1.0, progress))
+                    stage["detail"] = detail
+                    break
             self.revision += 1
             self.condition.notify_all()
 
@@ -100,6 +125,7 @@ class JobManager:
             if job.status == JobStatus.queued:
                 job.status = JobStatus.cancelled
                 job.stage = "Отменено пользователем"
+                job.error_code = "cancelled"
                 job.revision += 1
                 job.condition.notify_all()
         return job
@@ -129,10 +155,31 @@ class JobManager:
             try:
                 self._process(job)
             except InterruptedError:
+                job.error_code = "cancelled"
                 job.update(JobStatus.cancelled, "Отменено пользователем", job.progress)
             except Exception as error:  # User receives a safe message via API.
                 job.error = str(error)
-                job.update(JobStatus.failed, "Ошибка обработки", job.progress)
+                if "transcription_timeout" in str(error):
+                    job.error_code = "transcription_timeout"
+                    job.update(JobStatus.failed, "Таймаут расшифровки: нет прогресса 10 минут", job.progress)
+                else:
+                    error_lower = str(error).lower()
+                    if "checksum" in error_lower or "контрольная сумма" in error_lower:
+                        job.error_code = "checksum_mismatch"
+                    elif "скачать" in error_lower or "загрузк" in error_lower or "download" in error_lower:
+                        job.error_code = "model_download_failed"
+                    elif "ffmpeg" in error_lower or "аудио" in error_lower or "audio" in error_lower:
+                        job.error_code = "audio_preparation_failed"
+                    elif "load_model" in error_lower:
+                        job.error_code = "model_load_failed"
+                    else:
+                        job.error_code = "unknown_error"
+                    job.update(JobStatus.failed, "Ошибка обработки", job.progress)
+                # Mark any in_progress stage as failed
+                with job.condition:
+                    for stage in job.stages:
+                        if stage["status"] == "in_progress":
+                            stage["status"] = "failed"
                 # Persist failure status to disk
                 metadata_path = job.directory / "metadata.json"
                 if metadata_path.is_file():
@@ -147,26 +194,74 @@ class JobManager:
     def _process(self, job: Job) -> None:
         if job.cancelled:
             raise InterruptedError
+
+        # Stage: audio_preparation
         job.update(JobStatus.preparing, "Подготовка аудио…", 0.03)
+        job.update_stage("audio_preparation", "in_progress", 0.0, "Подготовка аудио…")
         wav_path = job.directory / "normalized.wav"
         run_ffmpeg(job.source_path, wav_path, job.start_seconds, job.end_seconds)
         job.duration_seconds = wav_duration_seconds(wav_path)
+        job.update_stage("audio_preparation", "completed", 1.0, "Аудио готово")
         if job.cancelled:
             raise InterruptedError
 
         def report(stage: str, progress: float) -> None:
-            status = JobStatus.loading_model if progress <= 0.3 else JobStatus.transcribing
+            job.last_progress_time = time.time()
+            status = JobStatus.loading_model if progress < 0.3 else JobStatus.transcribing
             job.update(status, stage, progress)
+            # Map gigaam progress to appropriate stage
+            if progress < 0.22:
+                job.update_stage("model_download", "in_progress", progress / 0.22, "Скачивание модели…")
+            elif progress < 0.30:
+                job.update_stage("model_download", "completed", 1.0, "Модель скачана")
+                job.update_stage("model_load", "in_progress", (progress - 0.22) / 0.08, "Загрузка модели в память…")
+            elif progress < 0.97:
+                job.update_stage("model_load", "completed", 1.0, "Модель загружена")
+                job.update_stage("transcription", "in_progress", (progress - 0.30) / 0.67, stage)
+            else:
+                job.update_stage("transcription", "completed", 1.0, "Распознавание завершено")
+                job.update_stage("merging", "in_progress", (progress - 0.97) / 0.03, "Объединение результата…")
 
-        text = self.gigaam.transcribe(
-            job.model,
-            wav_path,
-            job.directory / "chunks",
-            report,
-            lambda: job.cancelled,
-        )
+        job.last_progress_time = time.time()
+        timed_out = False
+        stop_monitor = threading.Event()
+
+        def timeout_monitor() -> None:
+            nonlocal timed_out
+            while not job.cancelled and not stop_monitor.is_set():
+                elapsed = time.time() - job.last_progress_time
+                if elapsed > settings.transcription_timeout:
+                    timed_out = True
+                    job.cancelled = True
+                    return
+                time.sleep(5)
+
+        monitor = threading.Thread(target=timeout_monitor, name=f"qaztriber-timeout-{job.id}", daemon=True)
+        monitor.start()
+
+        text: str | None = None
+        try:
+            text = self.gigaam.transcribe(
+                job.model,
+                wav_path,
+                job.directory / "chunks",
+                report,
+                lambda: job.cancelled,
+            )
+        except InterruptedError:
+            # If timeout triggered the cancellation, convert to RuntimeError
+            if timed_out:
+                raise RuntimeError("transcription_timeout") from None
+            raise
+        finally:
+            stop_monitor.set()  # Stop monitor
+
         if job.cancelled:
+            if timed_out:
+                raise RuntimeError("transcription_timeout")
             raise InterruptedError
+        job.update_stage("merging", "completed", 1.0, "Результат объединён")
+        job.update_stage("done", "completed", 1.0, "Готово")
         job.text = text
         job.update(JobStatus.completed, "Готово", 1.0)
         # Update metadata.json with completion status

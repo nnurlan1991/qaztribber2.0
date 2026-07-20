@@ -58,6 +58,7 @@ class ModelPreloadManager:
         self.progress = 0.0
         self.stage = "Модели ещё не подготовлены"
         self.error: str | None = None
+        self.error_code: str | None = None
         self._lock = threading.RLock()
         self._cancelled = threading.Event()
         self._restore_status()
@@ -68,7 +69,7 @@ class ModelPreloadManager:
 
     def snapshot(self) -> dict[str, object]:
         with self._lock:
-            return {"status": self.status, "progress": self.progress, "stage": self.stage, "error": self.error}
+            return {"status": self.status, "progress": self.progress, "stage": self.stage, "error": self.error, "error_code": self.error_code}
 
     def start(self) -> dict[str, object]:
         with self._lock:
@@ -89,6 +90,7 @@ class ModelPreloadManager:
             if self.status == "downloading":
                 self.status = "cancelled"
                 self.stage = "Загрузка отменена пользователем"
+                self.error_code = "cancelled"
             self._persist_status()
         return self.snapshot()
 
@@ -107,6 +109,7 @@ class ModelPreloadManager:
                     "progress": self.progress,
                     "stage": self.stage,
                     "error": self.error,
+                    "error_code": self.error_code,
                     "timestamp": time.time(),
                 }
             settings.downloads_status_path.parent.mkdir(parents=True, exist_ok=True)
@@ -132,11 +135,13 @@ class ModelPreloadManager:
                 self.status = "paused"
                 self.progress = data.get("progress", 0.0)
                 self.stage = "Загрузка прервана. Нажмите «Продолжить» для возобновления."
+                self.error_code = data.get("error_code")
             else:
                 self.status = persisted_status
                 self.progress = data.get("progress", 0.0)
                 self.stage = data.get("stage", "Модели ещё не подготовлены")
                 self.error = data.get("error")
+                self.error_code = data.get("error_code")
         except (OSError, json.JSONDecodeError):
             pass  # best-effort
 
@@ -171,6 +176,7 @@ class ModelPreloadManager:
                 if self._cancelled.is_set():
                     self.status = "cancelled"
                     self.stage = "Загрузка отменена пользователем"
+                    self.error_code = "cancelled"
                 else:
                     self.status = "completed"
                     self.progress = 1.0
@@ -180,6 +186,13 @@ class ModelPreloadManager:
             with self._lock:
                 self.status = "failed"
                 self.error = str(error)
+                error_lower = str(error).lower()
+                if "checksum" in error_lower or "контрольная сумма" in error_lower:
+                    self.error_code = "checksum_mismatch"
+                elif "download" in error_lower or "timeout" in error_lower or "url" in error_lower:
+                    self.error_code = "model_download_failed"
+                else:
+                    self.error_code = "unknown_error"
                 self.stage = "Не удалось подготовить модели"
                 self._persist_status()
 
