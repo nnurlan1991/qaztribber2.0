@@ -11,6 +11,7 @@ class JobStatus(str, Enum):
     preparing = "preparing"
     loading_model = "loading_model"
     transcribing = "transcribing"
+    paused = "paused"
     completed = "completed"
     failed = "failed"
     cancelled = "cancelled"

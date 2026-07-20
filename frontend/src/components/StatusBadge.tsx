@@ -9,6 +9,7 @@ const STATUS_CLASS: Record<SessionStatus, string> = {
   completed: "completed",
   failed: "failed",
   cancelled: "cancelled",
+  paused: "paused",
 };
 
 const STATUS_KEY: Record<SessionStatus, string> = {
@@ -19,6 +20,7 @@ const STATUS_KEY: Record<SessionStatus, string> = {
   completed: "status.completed",
   failed: "status.failed",
   cancelled: "status.cancelled",
+  paused: "status.paused",
 };
 
 export function StatusBadge({ status }: { status: SessionStatus }) {

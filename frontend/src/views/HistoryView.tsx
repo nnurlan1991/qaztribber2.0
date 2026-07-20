@@ -1,18 +1,73 @@
-import { useMemo, useState } from "react";
-import { cancelJob, deleteJob } from "../api";
+import { useEffect, useMemo, useState } from "react";
+import { cancelJob, createJob, deleteJob } from "../api";
 import { useApp } from "../store";
 import { Icon } from "../icons";
 import { Modal } from "../components/Modal";
 import { StatusBadge } from "../components/StatusBadge";
 import { formatDate, sourceIcon } from "../storage";
 
+const ACTIVE_STATUSES = ["queued", "preparing", "loading_model", "transcribing", "paused"];
+
+function LiveProgressCell({ sessionId, initialProgress, initialStatus }: {
+  sessionId: string;
+  initialProgress: number;
+  initialStatus: string;
+}) {
+  const [progress, setProgress] = useState(initialProgress);
+  const [status, setStatus] = useState(initialStatus);
+  const { t, patchSession } = useApp();
+
+  useEffect(() => {
+    if (!ACTIVE_STATUSES.includes(initialStatus)) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function poll() {
+      try {
+        const response = await fetch(`/api/transcriptions/${encodeURIComponent(sessionId)}`);
+        if (!response.ok) return;
+        const job = await response.json();
+        if (cancelled) return;
+        setProgress(job.progress || 0);
+        setStatus(job.status);
+        patchSession(sessionId, { progress: job.progress, status: job.status });
+        if (ACTIVE_STATUSES.includes(job.status)) {
+          timer = setTimeout(poll, 1000);
+        }
+      } catch {
+        if (!cancelled) timer = setTimeout(poll, 2000);
+      }
+    }
+
+    timer = setTimeout(poll, 1000);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [sessionId, initialStatus, patchSession]);
+
+  if (!ACTIVE_STATUSES.includes(status) || !ACTIVE_STATUSES.includes(initialStatus)) return null;
+
+  const pct = Math.round(progress * 100);
+  return (
+    <div className="live-progress-cell" aria-label={t("history.progress")}>
+      <div className="live-progress-bar">
+        <div className="live-progress-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <span className="live-progress-pct">{pct}%</span>
+    </div>
+  );
+}
+
 export function HistoryView() {
-  const { t, lang, sessions, removeSessions, navigate, patchSession } = useApp();
+  const { t, lang, sessions, removeSessions, navigate, patchSession, setError } = useApp();
   const [query, setQuery] = useState("");
   const [selectMode, setSelectMode] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [renameTarget, setRenameTarget] = useState<{ id: string; value: string } | null>(null);
+  const [retryingId, setRetryingId] = useState<string | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -30,6 +85,23 @@ export function HistoryView() {
   function selectAll() { setSelected(new Set(filtered.map((s) => s.id))); }
   function clearSelect() { setSelected(new Set()); }
   function exitSelect() { setSelectMode(false); clearSelect(); }
+
+  async function handleRetry(id: string, model: string, language: string, filename: string | null) {
+    if (retryingId) return;
+    setRetryingId(id);
+    try {
+      const response = await fetch(`/api/transcriptions/${encodeURIComponent(id)}/source`);
+      if (!response.ok) throw new Error(t("history.retryFailed"));
+      const blob = await response.blob();
+      const file = new File([blob], filename || `retry-${id}.wav`, { type: blob.type || "audio/wav" });
+      const newJob = await createJob(file, model as "220m" | "600m", language as "kazakh" | "russian" | "mixed", 0, 0);
+      navigate("session", newJob.id);
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("error.create"));
+    } finally {
+      setRetryingId(null);
+    }
+  }
 
   async function deleteSelected() {
     const ids = Array.from(selected);
@@ -122,12 +194,28 @@ export function HistoryView() {
                   <StatusBadge status={s.status} />
                   <span>{formatDate(s.createdAt, lang)}</span>
                   {s.durationMs ? <span>{Math.round(s.durationMs / 1000)}{t("common.sec")}</span> : null}
+                  <LiveProgressCell
+                    sessionId={s.id}
+                    initialProgress={s.progress || 0}
+                    initialStatus={s.status}
+                  />
                 </div>
                 {!selectMode && (
                   <div className="row-actions">
                     {["queued", "preparing", "loading_model", "transcribing"].includes(s.status) && (
                       <button className="icon-btn danger" style={{ width: 32, height: 32 }} onClick={(e) => { e.stopPropagation(); handleStop(s.id); }} title={t("history.stop")}>
                         <Icon name="stop" size={16} />
+                      </button>
+                    )}
+                    {(s.status === "failed" || (s.status as string) === "interrupted") && (
+                      <button
+                        className="icon-btn"
+                        style={{ width: 32, height: 32, opacity: retryingId === s.id ? 0.5 : 1 }}
+                        disabled={retryingId === s.id}
+                        onClick={(e) => { e.stopPropagation(); handleRetry(s.id, s.modelUsed, s.expectedLanguage, s.originalFilename); }}
+                        title={t("history.retry")}
+                      >
+                        <Icon name="refresh" size={16} />
                       </button>
                     )}
                     <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={(e) => { e.stopPropagation(); startRename(s.id, s.displayName); }} title={t("session.rename")}><Icon name="edit" size={16} /></button>

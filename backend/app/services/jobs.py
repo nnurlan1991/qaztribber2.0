@@ -43,6 +43,7 @@ class Job:
     text: str | None = None
     duration_seconds: float | None = None
     cancelled: bool = False
+    paused: bool = False
     last_progress_time: float = 0.0
     revision: int = 0
     condition: threading.Condition = field(default_factory=lambda: threading.Condition(threading.RLock()))
@@ -130,10 +131,30 @@ class JobManager:
                 job.condition.notify_all()
         return job
 
+    def pause(self, job_id: str) -> Job | None:
+        job = self.get(job_id)
+        if job is None or job.status not in {JobStatus.transcribing, JobStatus.queued}:
+            return None
+        with job.condition:
+            job.paused = True
+            job.update(JobStatus.paused, "Пауза", job.progress)
+        return job
+
+    def resume(self, job_id: str) -> Job | None:
+        job = self.get(job_id)
+        if job is None or job.status != JobStatus.paused:
+            return None
+        with job.condition:
+            job.paused = False
+            job.last_progress_time = time.time()  # Reset timeout clock on resume
+            job.update(JobStatus.transcribing, "Продолжение…", job.progress)
+            job.condition.notify_all()
+        return job
+
     def delete(self, job_id: str) -> bool:
         with self._lock:
             job = self._jobs.get(job_id)
-            if job is None or job.status in {JobStatus.preparing, JobStatus.loading_model, JobStatus.transcribing}:
+            if job is None or job.status in {JobStatus.preparing, JobStatus.loading_model, JobStatus.transcribing, JobStatus.paused}:
                 return False
             self._jobs.pop(job_id)
         shutil.rmtree(job.directory, ignore_errors=True)
@@ -206,6 +227,12 @@ class JobManager:
             raise InterruptedError
 
         def report(stage: str, progress: float) -> None:
+            # Check pause — wait until resumed
+            while job.paused and not job.cancelled:
+                with job.condition:
+                    job.condition.wait(timeout=1.0)
+            if job.cancelled:
+                raise InterruptedError
             job.last_progress_time = time.time()
             status = JobStatus.loading_model if progress < 0.3 else JobStatus.transcribing
             job.update(status, stage, progress)
@@ -229,6 +256,9 @@ class JobManager:
         def timeout_monitor() -> None:
             nonlocal timed_out
             while not job.cancelled and not stop_monitor.is_set():
+                if job.paused:
+                    time.sleep(5)
+                    continue
                 elapsed = time.time() - job.last_progress_time
                 if elapsed > settings.transcription_timeout:
                     timed_out = True

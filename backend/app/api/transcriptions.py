@@ -333,12 +333,50 @@ def cancel_transcription(request: Request, job_id: str) -> JobResponse:
     return job_response(job)
 
 
+@router.post("/transcriptions/{job_id}/pause", response_model=JobResponse)
+def pause_transcription(request: Request, job_id: str) -> JobResponse:
+    job = manager(request).pause(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Задача не найдена или не может быть приостановлена.")
+    return job_response(job)
+
+
+@router.post("/transcriptions/{job_id}/resume", response_model=JobResponse)
+def resume_transcription(request: Request, job_id: str) -> JobResponse:
+    job = manager(request).resume(job_id)
+    if job is None:
+        raise HTTPException(status_code=404, detail="Задача не найдена или не может быть продолжена.")
+    return job_response(job)
+
+
 @router.get("/transcriptions/{job_id}/result", response_model=ResultResponse)
 def transcription_result(request: Request, job_id: str) -> ResultResponse:
     job = get_job(request, job_id)
     if job.status != JobStatus.completed or job.text is None:
         raise HTTPException(status_code=409, detail="Результат ещё не готов.")
     return ResultResponse(id=job.id, text=job.text, model=job.model, expected_language=job.expected_language, duration_seconds=job.duration_seconds)  # type: ignore[arg-type]
+
+
+@router.get("/transcriptions/{job_id}/source")
+async def get_source_audio(job_id: str, request: Request):
+    """Return the original source audio file for retry operations."""
+    job = get_job(request, job_id)
+    if not job.source_path or not job.source_path.is_file():
+        raise HTTPException(status_code=404, detail="Source audio not available")
+    ext = job.source_path.suffix.lower()
+    media_type = {
+        ".wav": "audio/wav",
+        ".mp3": "audio/mpeg",
+        ".m4a": "audio/mp4",
+        ".ogg": "audio/ogg",
+        ".flac": "audio/flac",
+        ".webm": "audio/webm",
+    }.get(ext, "application/octet-stream")
+    return FileResponse(
+        path=str(job.source_path),
+        media_type=media_type,
+        filename=job.source_path.name,
+    )
 
 
 @router.get("/transcriptions/{job_id}/result.txt")

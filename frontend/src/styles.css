@@ -615,6 +615,8 @@ a { color: inherit; text-decoration: none; }
 .badge-status.recording .dot { background: var(--status-rec); animation: rec-pulse 1.4s infinite; }
 .badge-status.transcribing { background: rgba(247, 189, 72, 0.14); color: var(--status-warn); }
 .badge-status.transcribing .dot { background: var(--status-warn); animation: rec-pulse 1.4s infinite; }
+.badge-status.paused { background: rgba(247, 189, 72, 0.14); color: var(--status-warn); }
+.badge-status.paused .dot { background: var(--status-warn); }
 .badge-status.completed { background: rgba(143, 212, 122, 0.12); color: var(--status-done); }
 .badge-status.completed .dot { background: var(--status-done); }
 .badge-status.failed, .badge-status.cancelled { background: rgba(255, 138, 128, 0.12); color: var(--status-err); }
@@ -910,6 +912,37 @@ a { color: inherit; text-decoration: none; }
   padding: var(--sp-12) var(--sp-6);
 }
 .welcome .logo-big { width: 120px; height: 120px; }
+
+/* ---------- Live progress cell (history view) ---------- */
+.live-progress-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 120px;
+}
+
+.live-progress-bar {
+  flex: 1;
+  height: 6px;
+  background: var(--hover-bg);
+  border-radius: 3px;
+  overflow: hidden;
+}
+
+.live-progress-fill {
+  height: 100%;
+  background: var(--secondary);
+  border-radius: 3px;
+  transition: width 0.3s ease;
+}
+
+.live-progress-pct {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+  min-width: 36px;
+  text-align: right;
+  font-family: var(--font-mono);
+}
 
 /* ---------- Utility ---------- */
 .hidden { display: none !important; }

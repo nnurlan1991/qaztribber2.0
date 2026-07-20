@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { deleteJob, getResult } from "../api";
+import { useState, useEffect } from "react";
+import { deleteJob, getResult, getJob } from "../api";
 import { useApp } from "../store";
 import { Icon } from "../icons";
 import { Modal } from "../components/Modal";
@@ -22,6 +22,62 @@ export function SessionView() {
     setText(session.transcript);
   }
 
+  // Live polling for active sessions
+  useEffect(() => {
+    if (!session) return;
+
+    const activeStatuses = ["queued", "preparing", "loading_model", "transcribing", "paused"];
+    if (!activeStatuses.includes(session.status)) return;
+
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout>;
+
+    async function poll() {
+      if (cancelled || !session) return;
+      try {
+        const job = await getJob(session.id);
+        if (cancelled) return;
+
+        patchSession(session.id, {
+          status: job.status,
+          progress: job.progress,
+          stage: job.stages?.find((s) => s.status === "in_progress")?.detail ?? session.stage,
+        });
+
+        // If completed, fetch result text
+        if (job.status === "completed") {
+          try {
+            const r = await getResult(session.id);
+            if (!cancelled) {
+              patchSession(session.id, {
+                transcript: r.text,
+                transcriptPreview: r.text.slice(0, 120),
+                durationMs: r.duration_seconds != null ? Math.round(r.duration_seconds * 1000) : null,
+              });
+              setText(r.text);
+            }
+          } catch { /* result not ready yet */ }
+          return;
+        }
+
+        // Stop polling on terminal status
+        if (!activeStatuses.includes(job.status)) return;
+
+        timer = setTimeout(poll, 500);
+      } catch {
+        // Network error — retry after 2s
+        if (!cancelled) timer = setTimeout(poll, 2000);
+      }
+    }
+
+    timer = setTimeout(poll, 500);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [session?.id, patchSession]);
+
   if (!session) {
     return (
       <div className="content narrow scroll">
@@ -36,7 +92,7 @@ export function SessionView() {
 
   const defaultName = `${t("nav.session")} ${session.id.slice(-4)}`;
   const display = session.displayName ?? defaultName;
-  const isActive = ["queued", "preparing", "loading_model", "transcribing"].includes(session.status);
+  const isActive = ["queued", "preparing", "loading_model", "transcribing", "paused"].includes(session.status);
 
   async function copyText() {
     if (!text) return;

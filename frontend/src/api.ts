@@ -18,7 +18,7 @@ export type StageStatus = {
 
 export type Job = {
   id: string;
-  status: "queued" | "preparing" | "loading_model" | "transcribing" | "completed" | "failed" | "cancelled";
+  status: "queued" | "preparing" | "loading_model" | "transcribing" | "paused" | "completed" | "failed" | "cancelled";
   progress: number;
   stage: string;
   error: string | null;
@@ -57,6 +57,8 @@ export const getModels = () => request<Model[]>("/api/models");
 export const deleteModel = (modelId: Model["id"]) => request<void>(`/api/models/${modelId}`, { method: "DELETE" });
 export const getResult = (jobId: string) => request<Result>(`/api/transcriptions/${jobId}/result`);
 export const cancelJob = (jobId: string) => request<Job>(`/api/transcriptions/${jobId}/cancel`, { method: "POST" });
+export const pauseJob = (jobId: string) => request<Job>(`/api/transcriptions/${jobId}/pause`, { method: "POST" });
+export const resumeJob = (jobId: string) => request<Job>(`/api/transcriptions/${jobId}/resume`, { method: "POST" });
 export const deleteJob = (jobId: string) => request<void>(`/api/transcriptions/${jobId}`, { method: "DELETE" });
 export const getPreload = () => request<Preload>("/api/models/preload");
 export const startPreload = () => request<Preload>("/api/models/preload", { method: "POST" });

@@ -45,6 +45,8 @@ const ru: Dict = {
   "home.transcribe": "Расшифровать",
   "home.transcribing": "Идёт обработка",
   "home.cancel": "Отменить",
+  "home.pause": "Пауза",
+  "home.resume": "Продолжить",
   "home.replace": "Заменить",
   "home.trim": "Обрезка",
   "home.trimStart": "Начало",
@@ -75,6 +77,7 @@ const ru: Dict = {
   "status.completed": "Завершено",
   "status.failed": "Ошибка",
   "status.cancelled": "Отменено",
+  "status.paused": "Пауза",
   "status.recording": "Запись",
 
   // Session
@@ -116,6 +119,9 @@ const ru: Dict = {
   "history.count": "сессий",
   "history.clearAll": "Очистить всё",
   "history.stop": "Остановить",
+  "history.retry": "Повторить",
+  "history.retryFailed": "Не удалось получить исходный аудио файл",
+  "history.progress": "Прогресс",
 
   // Models
   "models.title": "Управление моделями",
@@ -278,6 +284,8 @@ const kz: Dict = {
   "home.transcribe": "Тану",
   "home.transcribing": "Өңдеу барысында",
   "home.cancel": "Бас тарту",
+  "home.pause": "Кідірту",
+  "home.resume": "Жалғастыру",
   "home.replace": "Алмастыру",
   "home.trim": "Қию",
   "home.trimStart": "Басы",
@@ -305,6 +313,7 @@ const kz: Dict = {
   "status.completed": "Аяқталды",
   "status.failed": "Қате",
   "status.cancelled": "Бас тартылды",
+  "status.paused": "Кідірту",
   "status.recording": "Жазу",
 
   "session.title": "Сессия",
@@ -344,6 +353,9 @@ const kz: Dict = {
   "history.count": "сессия",
   "history.clearAll": "Барлығын тазалау",
   "history.stop": "Тоқтату",
+  "history.retry": "Қайталау",
+  "history.retryFailed": "Бастапқы аудио файлды алу сәтсіз аяқталды",
+  "history.progress": "Барысы",
 
   "models.title": "Модельдерді басқару",
   "models.subtitle": "GigaAM Multilingual · жүктеп алғаннан кейін офлайн жұмыс істейді",

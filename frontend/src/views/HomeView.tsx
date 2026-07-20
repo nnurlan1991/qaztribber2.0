@@ -1,5 +1,5 @@
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import { cancelJob, createJob, deleteJob, getResult, startPreload, watchJob } from "../api";
+import { cancelJob, createJob, deleteJob, getResult, pauseJob, resumeJob, startPreload, watchJob } from "../api";
 import { jobToSession, useApp } from "../store";
 import { Icon } from "../icons";
 import { ProgressBar } from "../components/ProgressBar";
@@ -176,6 +176,16 @@ export function HomeView() {
       return;
     }
     try { setJob(await cancelJob(job.id)); } catch (reason) { setError(reason instanceof Error ? reason.message : t("error.cancel")); }
+  }
+
+  async function handlePause() {
+    if (!job) return;
+    try { setJob(await pauseJob(job.id)); } catch (reason) { setError(reason instanceof Error ? reason.message : t("error.cancel")); }
+  }
+
+  async function handleResume() {
+    if (!job) return;
+    try { setJob(await resumeJob(job.id)); } catch (reason) { setError(reason instanceof Error ? reason.message : t("error.cancel")); }
   }
 
   async function reset() {
@@ -359,6 +369,18 @@ export function HomeView() {
                 <span className="mono gold-text" style={{ fontSize: 22, fontWeight: 800 }}>{Math.round(job.progress * 100)}%</span>
               </div>
               <ProgressBar value={job.progress} className="lg" />
+              <div className="row-flex gap-2" style={{ marginTop: "var(--sp-2)" }}>
+                {job.status === "transcribing" && (
+                  <button className="btn btn-soft sm" onClick={handlePause}>
+                    <Icon name="pause" size={16} />{t("home.pause")}
+                  </button>
+                )}
+                {job.status === "paused" && (
+                  <button className="btn btn-gold sm" onClick={handleResume}>
+                    <Icon name="play_arrow" size={16} />{t("home.resume")}
+                  </button>
+                )}
+              </div>
             </div>
           )}
           {job?.status === "failed" && <div className="notice error" style={{ flex: "0 0 auto" }}><Icon name="error" size={16} /><span>{job.error || t("error.transcribe")}</span></div>}
