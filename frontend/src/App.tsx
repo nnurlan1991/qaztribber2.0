@@ -1,3 +1,4 @@
+import { useState, useEffect, useCallback } from "react";
 import { AppProvider, useApp } from "./store";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
@@ -7,6 +8,9 @@ import { HistoryView } from "./views/HistoryView";
 import { SessionView } from "./views/SessionView";
 import { ModelsView } from "./views/ModelsView";
 import { SettingsView } from "./views/SettingsView";
+import { OnboardingModal } from "./components/OnboardingModal";
+import { DownloadProgressModal } from "./components/DownloadProgressModal";
+import { isFirstLaunch, markInitialized, startPreload } from "./api";
 
 function GlobalError() {
   const { error, setError, t } = useApp();
@@ -38,14 +42,57 @@ function ViewRouter() {
 }
 
 function Shell() {
+  const [showOnboarding, setShowOnboarding] = useState(false);
+  const [showDownloadModal, setShowDownloadModal] = useState(false);
+  const { setError, preload } = useApp();
+
+  useEffect(() => {
+    isFirstLaunch()
+      .then(({ first_launch }) => {
+        if (first_launch) setShowOnboarding(true);
+      })
+      .catch(() => {
+        // Silently ignore — onboarding is not critical
+      });
+  }, []);
+
+  const handleDownloadModels = useCallback(async () => {
+    try {
+      await markInitialized();
+      setShowOnboarding(false);
+      await startPreload();
+      setShowDownloadModal(true);
+    } catch (reason) {
+      setError((reason as Error).message);
+    }
+  }, [setError]);
+
+  const handleSkip = useCallback(async () => {
+    try {
+      await markInitialized();
+    } catch {
+      // Silently ignore
+    }
+    setShowOnboarding(false);
+  }, []);
+
   return (
     <div className="app">
       <Sidebar />
       <main className="main">
-        <TopBar />
+        <TopBar onOpenDownloadModal={() => setShowDownloadModal(true)} />
         <ViewRouter />
       </main>
       <GlobalError />
+      {showOnboarding && (
+        <OnboardingModal
+          onDownloadModels={handleDownloadModels}
+          onSkip={handleSkip}
+        />
+      )}
+      {showDownloadModal && preload && (preload.status === "downloading" || preload.status === "paused" || preload.status === "completed" || preload.status === "failed" || preload.status === "cancelled") && (
+        <DownloadProgressModal onClose={() => setShowDownloadModal(false)} />
+      )}
     </div>
   );
 }

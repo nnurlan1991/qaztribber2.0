@@ -124,6 +124,58 @@ export function formatDate(ts: number, lang: "ru" | "kz"): string {
   return `${dateStr}, ${time}`;
 }
 
+export interface ServerSession {
+  id: string;
+  status: string;  // "completed" | "interrupted" | "failed" | "active"
+  created_at: number;
+  filename: string | null;
+  model: string | null;
+  expected_language: string | null;
+  has_result: boolean;
+  has_source: boolean;
+  duration_seconds: number | null;
+  error: string | null;
+}
+
+export async function syncSessionsFromServer(): Promise<SessionRecord[]> {
+  try {
+    const response = await fetch("http://127.0.0.1:8765/api/sessions");
+    if (!response.ok) return loadSessions();
+    const serverSessions: ServerSession[] = await response.json();
+
+    const local = loadSessions();
+    const localIds = new Set(local.map(s => s.id));
+
+    // Add sessions from server that are not in localStorage
+    for (const server of serverSessions) {
+      if (!localIds.has(server.id)) {
+        // New session from disk (recovery after restart)
+        local.unshift({
+          id: server.id,
+          createdAt: server.created_at * 1000,  // convert to ms
+          sourceType: "file",  // unknown, default to file
+          originalFilename: server.filename,
+          durationMs: server.duration_seconds ? server.duration_seconds * 1000 : null,
+          status: server.status === "active" ? "queued" : server.status as SessionStatus,
+          transcriptPreview: null,
+          transcript: null,
+          modelUsed: (server.model as "220m" | "600m") || "220m",
+          expectedLanguage: (server.expected_language as "kazakh" | "russian" | "mixed") || "mixed",
+          errorMessage: server.error,
+          progress: 0,
+          stage: "",
+          displayName: null,
+        });
+      }
+    }
+
+    saveSessions(local);
+    return local;
+  } catch {
+    return loadSessions();  // fallback to localStorage
+  }
+}
+
 export function sourceIcon(source: SourceType): string {
   switch (source) {
     case "mic": return "mic";

@@ -187,6 +187,36 @@ const ru: Dict = {
   "error.modelDelete": "Не удалось удалить модель.",
   "error.transcribe": "Не удалось обработать аудио.",
   "error.cancelled": "Задача отменена. Исходный файл остаётся выбранным.",
+
+  // Download
+  "download.title": "Загрузка моделей",
+  "download.cancel": "Отменить загрузку",
+  "download.cancelConfirm": "Вы уверены? Загруженные данные будут сохранены.",
+  "download.continue": "Продолжить",
+  "download.close": "Закрыть",
+  "download.eta": "Осталось ~{minutes} мин",
+  "download.paused": "Загрузка приостановлена",
+  "download.resume": "Продолжить загрузку",
+  "download.completed": "Загрузка завершена",
+  "download.failed": "Ошибка загрузки",
+  "download.cancelled": "Загрузка отменена",
+
+  // Onboarding
+  "onboarding.title": "Добро пожаловать в QazTriber",
+  "onboarding.description": "Локальная расшифровка казахской, русской и смешанной речи. Модели работают офлайн.",
+  "onboarding.downloadBoth": "Скачать обе модели",
+  "onboarding.skip": "Пропустить",
+  "onboarding.model220m": "Быстрая — 220M (~880 МБ)",
+  "onboarding.model600m": "Точная — 600M (~2.3 ГБ)",
+  "onboarding.model220mDesc": "Для повседневной расшифровки",
+  "onboarding.model600mDesc": "Для максимального качества",
+
+  // Model Download Dialog
+  "modelDialog.title": "Модель не готова",
+  "modelDialog.message": "Выбранная модель ({model}) ещё не скачана. Скачать сейчас?",
+  "modelDialog.download220m": "Скачать 220M (быстрая, ~880 МБ)",
+  "modelDialog.download600m": "Скачать 600M (точная, ~2.3 ГБ)",
+  "modelDialog.cancel": "Отмена",
 };
 
 const kz: Dict = {
@@ -353,6 +383,36 @@ const kz: Dict = {
   "error.modelDelete": "Модельді жою сәтсіз.",
   "error.transcribe": "Аудио өңдеу сәтсіз.",
   "error.cancelled": "Тапсырмадан бас тартылды. Бастапқы файл таңдалып қалды.",
+
+  // Download
+  "download.title": "Модельдерді жүктеу",
+  "download.cancel": "Жүктеуді тоқтату",
+  "download.cancelConfirm": "Сенімдісіз бе? Жүктелген деректер сақталады.",
+  "download.continue": "Жалғастыру",
+  "download.close": "Жабу",
+  "download.eta": "Қалды ~{minutes} мин",
+  "download.paused": "Жүктеу тоқтатылды",
+  "download.resume": "Жүктеуді жалғастыру",
+  "download.completed": "Жүктеу аяқталды",
+  "download.failed": "Жүктеу қатесі",
+  "download.cancelled": "Жүктеу тоқтатылды",
+
+  // Onboarding
+  "onboarding.title": "QazTriber-ге қош келдіңіз",
+  "onboarding.description": "Қазақ, орыс және аралас сөйлеуді жергілікті тану. Модельдер офлайн жұмыс істейді.",
+  "onboarding.downloadBoth": "Екі модельді жүктеу",
+  "onboarding.skip": "Өткізу",
+  "onboarding.model220m": "Жылдам — 220M (~880 МБ)",
+  "onboarding.model600m": "Дәл — 600M (~2.3 ГБ)",
+  "onboarding.model220mDesc": "Күнделікті тану үшін",
+  "onboarding.model600mDesc": "Максималды сапа үшін",
+
+  // Model Download Dialog
+  "modelDialog.title": "Модель дайын емес",
+  "modelDialog.message": "Таңдалған модель ({model}) әлі жүктелмеген. Қазір жүктеу керек пе?",
+  "modelDialog.download220m": "220M жүктеу (жылдам, ~880 МБ)",
+  "modelDialog.download600m": "600M жүктеу (дәл, ~2.3 ГБ)",
+  "modelDialog.cancel": "Бас тарту",
 };
 
 const dicts: Record<Lang, Dict> = { ru, kz };

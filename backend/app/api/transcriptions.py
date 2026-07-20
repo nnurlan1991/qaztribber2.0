@@ -4,14 +4,15 @@ import asyncio
 import json
 import os
 import platform
+import re
 import sys
 from pathlib import Path
 
-from fastapi import APIRouter, File, Form, HTTPException, Request, UploadFile
+from fastapi import APIRouter, File, Form, HTTPException, Query, Request, UploadFile
 from fastapi.responses import FileResponse, StreamingResponse
 
 from ..config import settings
-from ..schemas import JobResponse, JobStatus, ModelResponse, PreloadResponse, ResultResponse, SystemInfoResponse
+from ..schemas import JobResponse, JobStatus, ModelResponse, PreloadResponse, ResultResponse, SessionResponse, SystemInfoResponse
 from ..services.gigaam import GigaAMService, MODELS, ModelPreloadManager
 from ..services.jobs import Job, JobManager
 
@@ -149,6 +150,93 @@ def preload_models(request: Request) -> PreloadResponse:
     return preload_response(request.app.state.preload) if request.app.state.preload.status == "downloading" else PreloadResponse(**request.app.state.preload.start())  # type: ignore[arg-type]
 
 
+@router.post("/models/preload/cancel", response_model=PreloadResponse)
+def cancel_preload(request: Request) -> PreloadResponse:
+    """Отменяет загрузку моделей."""
+    preload = request.app.state.preload
+    snapshot = preload.cancel()
+    return PreloadResponse(**snapshot)
+
+
+@router.get("/sessions", response_model=list[SessionResponse])
+def list_sessions(request: Request) -> list[SessionResponse]:
+    """Сканирует jobs/ директорию и возвращает список сессий на диске.
+
+    In-memory jobs (active) также включаются с их текущим статусом.
+    Jobs без metadata.json помечаются как 'interrupted'.
+    """
+    jobs_dir = settings.jobs_dir
+    sessions: list[SessionResponse] = []
+
+    # Get in-memory jobs for status override
+    mgr = manager(request)
+    in_memory: dict[str, Job] = {}
+    with mgr._lock:
+        in_memory = dict(mgr._jobs)
+
+    if not jobs_dir.is_dir():
+        return []
+
+    for job_dir in jobs_dir.iterdir():
+        if not job_dir.is_dir():
+            continue
+        job_id = job_dir.name
+
+        # Read metadata.json
+        metadata_path = job_dir / "metadata.json"
+        metadata: dict = {}
+        if metadata_path.is_file():
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            except (OSError, json.JSONDecodeError):
+                pass
+
+        # Determine status
+        has_result = (job_dir / "transcription.txt").is_file()
+        has_source = (job_dir / "source").is_file()
+
+        # If job is in memory, use its live status
+        if job_id in in_memory:
+            live_job = in_memory[job_id]
+            live_status = live_job.status.value
+            if live_status in ("completed", "failed", "cancelled"):
+                status = live_status
+            else:
+                status = "active"  # queued/preparing/loading_model/transcribing
+        elif "status" in metadata:
+            status = metadata["status"]
+        elif has_result:
+            status = "completed"
+        else:
+            status = "interrupted"
+
+        # Determine created_at
+        created_at = metadata.get("created_at")
+        if created_at is None:
+            # Fallback to directory mtime
+            try:
+                created_at = job_dir.stat().st_mtime
+            except OSError:
+                created_at = 0.0
+
+        sessions.append(SessionResponse(
+            id=job_id,
+            status=status,
+            created_at=created_at,
+            filename=metadata.get("filename"),
+            model=metadata.get("model"),
+            expected_language=metadata.get("expected_language"),
+            has_result=has_result,
+            has_source=has_source,
+            duration_seconds=metadata.get("duration_seconds"),
+            error=metadata.get("error"),
+        ))
+
+    # Sort by created_at descending (newest first)
+    sessions.sort(key=lambda s: s.created_at, reverse=True)
+    return sessions
+
+
 @router.delete("/models/{model_id}", status_code=204)
 def delete_model(request: Request, model_id: str) -> None:
     if model_id not in MODELS:
@@ -260,3 +348,76 @@ def transcription_txt(request: Request, job_id: str) -> FileResponse:
 def delete_transcription(request: Request, job_id: str) -> None:
     if not manager(request).delete(job_id):
         raise HTTPException(status_code=409, detail="Задачу нельзя удалить во время обработки.")
+
+
+@router.get("/first-launch")
+def check_first_launch() -> dict[str, bool]:
+    """Возвращает {first_launch: bool}. Не создаёт маркер — только проверяет."""
+    return {"first_launch": not settings.initialized_marker.exists()}
+
+
+@router.post("/first-launch/initialize")
+def mark_initialized() -> dict[str, bool]:
+    """Создаёт маркер первого запуска."""
+    marker = settings.initialized_marker
+    marker.parent.mkdir(parents=True, exist_ok=True)
+    marker.write_text("1", encoding="utf-8")
+    return {"initialized": True}
+
+
+_LEVEL_ORDER: dict[str, int] = {"DEBUG": 10, "INFO": 20, "WARNING": 30, "ERROR": 40, "CRITICAL": 50}
+_LOG_LEVEL_RE = re.compile(r"\[(DEBUG|INFO|WARNING|ERROR|CRITICAL)\]")
+
+
+@router.get("/logs")
+def api_logs(
+    tail: int = Query(default=100, ge=1, le=1000),
+    level: str = Query(default="INFO"),
+) -> dict[str, object]:
+    log_path = settings.logs_dir / "sidecar.log"
+    if not log_path.is_file():
+        return {"lines": [], "total_in_file": 0, "returned": 0}
+
+    try:
+        raw = log_path.read_text(encoding="utf-8", errors="replace")
+    except OSError:
+        return {"lines": [], "total_in_file": 0, "returned": 0}
+
+    all_lines = raw.splitlines()
+    total_in_file = len(all_lines)
+
+    # Apply tail
+    if tail < total_in_file:
+        all_lines = all_lines[-tail:]
+
+    # Level filtering
+    if level.upper() != "ALL":
+        min_priority = _LEVEL_ORDER.get(level.upper(), 20)
+        filtered: list[str] = []
+        keep = False
+        for line in all_lines:
+            match = _LOG_LEVEL_RE.search(line)
+            if match:
+                line_level = _LEVEL_ORDER.get(match.group(1), 0)
+                keep = line_level >= min_priority
+            # Non-matching lines (stack traces) are kept if they follow a matching line
+            if keep:
+                filtered.append(line)
+        all_lines = filtered
+
+    # Enforce 1 MB response cap
+    max_bytes = 1024 * 1024
+    truncated = False
+    cumulative = 0
+    cutoff = 0
+    for i, line in enumerate(all_lines):
+        cumulative += len(line.encode("utf-8")) + 1  # +1 for newline in JSON array
+        if cumulative > max_bytes:
+            cutoff = i
+            truncated = True
+            break
+
+    if truncated:
+        all_lines = all_lines[:cutoff] + ["[truncated]"]
+
+    return {"lines": all_lines, "total_in_file": total_in_file, "returned": len(all_lines)}

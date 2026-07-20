@@ -4,6 +4,7 @@ import { jobToSession, useApp } from "../store";
 import { Icon } from "../icons";
 import { ProgressBar } from "../components/ProgressBar";
 import { StatusBadge } from "../components/StatusBadge";
+import { ModelDownloadDialog } from "../components/ModelDownloadDialog";
 import { formatTime, sourceIcon, type SourceType } from "../storage";
 import type { Job, Model } from "../api";
 
@@ -28,6 +29,9 @@ export function HomeView() {
   const chunks = useRef<Blob[]>([]);
   const recTimer = useRef<number | null>(null);
   const fileInput = useRef<HTMLInputElement | null>(null);
+  const [showModelDialog, setShowModelDialog] = useState(false);
+  const [pendingRun, setPendingRun] = useState(false);
+  const pendingModel = useRef<Model["id"] | null>(null);
 
   // Sync from TopBar model toggle
   useEffect(() => { setSelectedModel(prefs.defaultModel); }, [prefs.defaultModel]);
@@ -70,6 +74,17 @@ export function HomeView() {
     }
     return () => { if (recTimer.current) window.clearInterval(recTimer.current); };
   }, [recording]);
+
+  // Auto-run transcription when preload completes for pending transcription
+  useEffect(() => {
+    if (preload?.status === "completed" && pendingRun && file && pendingModel.current) {
+      setPendingRun(false);
+      setSelectedModel(pendingModel.current);
+      // Use setTimeout to avoid setState-during-render issues;
+      // pass pendingModel.current explicitly to avoid stale closure over selectedModel
+      window.setTimeout(() => run(pendingModel.current ?? undefined), 0);
+    }
+  }, [preload?.status, pendingRun, file]);
 
   const selected = useMemo(() => models.find((m) => m.id === selectedModel), [models, selectedModel]);
   const busy = job !== null && !terminalStatuses.has(job.status);
@@ -116,11 +131,21 @@ export function HomeView() {
     }
   }
 
-  async function run() {
+  async function run(modelOverride?: Model["id"]) {
     if (!file) return;
+
+    const modelId = modelOverride ?? selectedModel;
+
+    const selectedModelObj = models.find((m) => m.id === modelId);
+    if (selectedModelObj && !selectedModelObj.cached) {
+      setShowModelDialog(true);
+      setPendingRun(true);
+      return;
+    }
+
     setError(null); setResult(null);
     try {
-      const created = await createJob(file, selectedModel, expectedLanguage, 0, duration);
+      const created = await createJob(file, modelId, expectedLanguage, 0, duration);
       setJob(created);
       upsertSession(jobToSession(created, {
         sourceType,
@@ -153,6 +178,19 @@ export function HomeView() {
 
   async function preloadModels() {
     try { setError(null); await startPreload(); await refreshPreload(); } catch (reason) { setError(reason instanceof Error ? reason.message : t("error.preload")); }
+  }
+
+  async function handleDownloadForTranscribe(modelId: Model["id"]) {
+    setShowModelDialog(false);
+    pendingModel.current = modelId;
+    try {
+      setError(null);
+      await startPreload();
+      await refreshPreload();
+    } catch (reason) {
+      setPendingRun(false);
+      setError(reason instanceof Error ? reason.message : t("error.preload"));
+    }
   }
 
   const allCached = models.length > 0 && models.every((m) => m.cached);
@@ -208,7 +246,7 @@ export function HomeView() {
         <div className="hero-zone hero-zone-c">
           <div className="toolbar-row">
             {busy && <button className="btn btn-danger" onClick={cancel}><Icon name="cancel" size={16} />{t("home.cancel")}</button>}
-            <button className="btn btn-gold" disabled={!canRun} onClick={run}>
+            <button className="btn btn-gold" disabled={!canRun} onClick={() => run()}>
               <Icon name="bolt" size={16} fill />
               {busy ? t("home.transcribing") : `${t("home.transcribe")} · ${selected?.parameters ?? "…"}`}
             </button>
@@ -323,6 +361,14 @@ export function HomeView() {
           )}
         </section>
       </div>
+
+      {showModelDialog && (
+        <ModelDownloadDialog
+          modelName={selected?.parameters ?? selectedModel}
+          onDownload={handleDownloadForTranscribe}
+          onCancel={() => { setShowModelDialog(false); setPendingRun(false); }}
+        />
+      )}
     </div>
   );
 }

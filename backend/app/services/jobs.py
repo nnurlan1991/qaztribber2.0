@@ -1,7 +1,9 @@
 from __future__ import annotations
 
+import json
 import shutil
 import threading
+import time
 import uuid
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -60,6 +62,23 @@ class JobManager:
         job = Job(job_id, model, expected_language, filename, directory, source_path, start_seconds, end_seconds)
         with self._lock:
             self._jobs[job_id] = job
+        # Persist job metadata to disk
+        metadata = {
+            "id": job_id,
+            "model": model,
+            "expected_language": expected_language,
+            "filename": filename,
+            "created_at": time.time(),
+            "start_seconds": start_seconds,
+            "end_seconds": end_seconds,
+        }
+        try:
+            (directory / "metadata.json").write_text(
+                json.dumps(metadata, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except OSError:
+            pass
         return job
 
     def enqueue(self, job: Job) -> None:
@@ -114,6 +133,16 @@ class JobManager:
             except Exception as error:  # User receives a safe message via API.
                 job.error = str(error)
                 job.update(JobStatus.failed, "Ошибка обработки", job.progress)
+                # Persist failure status to disk
+                metadata_path = job.directory / "metadata.json"
+                if metadata_path.is_file():
+                    try:
+                        metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                        metadata["status"] = "failed"
+                        metadata["error"] = str(error)
+                        metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+                    except (OSError, json.JSONDecodeError):
+                        pass
 
     def _process(self, job: Job) -> None:
         if job.cancelled:
@@ -140,3 +169,13 @@ class JobManager:
             raise InterruptedError
         job.text = text
         job.update(JobStatus.completed, "Готово", 1.0)
+        # Update metadata.json with completion status
+        metadata_path = job.directory / "metadata.json"
+        if metadata_path.is_file():
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                metadata["status"] = "completed"
+                metadata["duration_seconds"] = job.duration_seconds
+                metadata_path.write_text(json.dumps(metadata, ensure_ascii=False, indent=2), encoding="utf-8")
+            except (OSError, json.JSONDecodeError):
+                pass

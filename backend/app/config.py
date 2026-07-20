@@ -36,9 +36,23 @@ class Settings:
     def jobs_dir(self) -> Path:
         return self.app_data_dir / "jobs"
 
+    @property
+    def logs_dir(self) -> Path:
+        return self.app_data_dir / "logs"
+
+    @property
+    def downloads_status_path(self) -> Path:
+        return self.app_data_dir / "downloads.json"
+
+    @property
+    def initialized_marker(self) -> Path:
+        """Маркер первого запуска приложения."""
+        return self.app_data_dir / ".initialized"
+
     def ensure_directories(self) -> None:
         self.models_dir.mkdir(parents=True, exist_ok=True)
         self.jobs_dir.mkdir(parents=True, exist_ok=True)
+        self.logs_dir.mkdir(parents=True, exist_ok=True)
 
 
 settings = Settings()

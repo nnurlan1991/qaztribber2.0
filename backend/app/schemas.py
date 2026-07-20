@@ -21,6 +21,8 @@ class PreloadStatus(str, Enum):
     downloading = "downloading"
     completed = "completed"
     failed = "failed"
+    cancelled = "cancelled"
+    paused = "paused"
 
 
 class ModelResponse(BaseModel):
@@ -57,6 +59,19 @@ class PreloadResponse(BaseModel):
     status: PreloadStatus
     progress: float = Field(ge=0, le=1)
     stage: str
+    error: str | None = None
+
+
+class SessionResponse(BaseModel):
+    id: str
+    status: str  # "completed" | "interrupted" | "failed" | "active"
+    created_at: float  # Unix timestamp
+    filename: str | None = None
+    model: str | None = None
+    expected_language: str | None = None
+    has_result: bool
+    has_source: bool
+    duration_seconds: float | None = None
     error: str | None = None
 
 

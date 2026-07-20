@@ -1,12 +1,25 @@
 use std::net::TcpStream;
+use std::path::PathBuf;
 use std::process::{Child, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tauri::{Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{Emitter, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder};
 
 const BACKEND_HOST: &str = "127.0.0.1";
 const BACKEND_PORT: u16 = 8765;
 const DEV_URL: &str = "http://localhost:5173";
 const BACKEND_STARTUP_TIMEOUT_SECS: u64 = 60;
+const MAX_RESTART_ATTEMPTS: u32 = 5;
+const MIN_UPTIME_FOR_RESET_SECS: u64 = 30;
+
+type SharedChild = Arc<Mutex<Option<Child>>>;
+
+#[derive(Clone, serde::Serialize)]
+struct SidecarStatus {
+    status: String,
+    attempt: u32,
+}
 
 fn backend_is_ready() -> bool {
     TcpStream::connect((BACKEND_HOST, BACKEND_PORT)).is_ok()
@@ -23,12 +36,200 @@ fn wait_for_backend(timeout_secs: u64) -> bool {
     false
 }
 
-struct SidecarProcess(Child);
+fn spawn_sidecar_thread(
+    app_handle: tauri::AppHandle,
+    resource_path: PathBuf,
+    shared_child: SharedChild,
+) {
+    std::thread::spawn(move || {
+        let mut attempt: u32 = 0;
+        loop {
+            let child = match Command::new(&resource_path)
+                .env("PYTHONUTF8", "1")
+                .env("PYTHONIOENCODING", "utf-8")
+                .stdout(Stdio::null())
+                .stderr(Stdio::null())
+                .spawn()
+            {
+                Ok(c) => c,
+                Err(e) => {
+                    eprintln!("Failed to spawn sidecar: {}", e);
+                    attempt += 1;
+                    if attempt > MAX_RESTART_ATTEMPTS {
+                        let _ = app_handle.emit(
+                            "sidecar-status",
+                            SidecarStatus {
+                                status: "failed".into(),
+                                attempt,
+                            },
+                        );
+                        return;
+                    }
+                    let delay = std::cmp::min(2u64.pow(attempt.min(6)), 60);
+                    std::thread::sleep(Duration::from_secs(delay));
+                    continue;
+                }
+            };
 
-impl Drop for SidecarProcess {
-    fn drop(&mut self) {
-        let _ = self.0.kill();
-        let _ = self.0.wait();
+            // Share the child handle so the exit handler can kill it
+            {
+                let mut guard = shared_child.lock().unwrap();
+                *guard = Some(child);
+            }
+
+            if !wait_for_backend(BACKEND_STARTUP_TIMEOUT_SECS) {
+                // BUG C2: kill old process before respawn
+                attempt += 1;
+                {
+                    let mut guard = shared_child.lock().unwrap();
+                    if let Some(mut old) = guard.take() {
+                        let _ = old.kill();
+                        let _ = old.wait();
+                    }
+                }
+                if attempt > MAX_RESTART_ATTEMPTS {
+                    let _ = app_handle.emit(
+                        "sidecar-status",
+                        SidecarStatus {
+                            status: "failed".into(),
+                            attempt,
+                        },
+                    );
+                    return;
+                }
+                let _ = app_handle.emit(
+                    "sidecar-status",
+                    SidecarStatus {
+                        status: "restarting".into(),
+                        attempt,
+                    },
+                );
+                let delay = std::cmp::min(2u64.pow(attempt.min(6)), 60);
+                std::thread::sleep(Duration::from_secs(delay));
+                continue;
+            }
+
+            // BUG C3: track uptime — only reset attempt if sidecar ran long enough
+            let started_at = Instant::now();
+            let _ = app_handle.emit(
+                "sidecar-status",
+                SidecarStatus {
+                    status: "connected".into(),
+                    attempt,
+                },
+            );
+
+            // BUG C2 + S1: improved monitoring loop
+            loop {
+                std::thread::sleep(Duration::from_millis(500));
+                match shared_child.lock().unwrap().as_mut() {
+                    Some(c) => match c.try_wait() {
+                        Ok(Some(_)) => break,  // child exited
+                        Ok(None) => continue,   // still running
+                        Err(_) => {
+                            // BUG S1: retry once before assuming exit
+                            std::thread::sleep(Duration::from_millis(100));
+                            match c.try_wait() {
+                                Ok(Some(_)) => break,
+                                Ok(None) => continue,
+                                Err(_) => {
+                                    // Still error — force kill and break
+                                    let _ = c.kill();
+                                    let _ = c.wait();
+                                    break;
+                                }
+                            }
+                        }
+                    },
+                    None => break, // child was taken by exit handler
+                }
+            }
+
+            // BUG C3: only reset attempt if uptime was sufficient
+            let uptime = started_at.elapsed();
+            {
+                let mut guard = shared_child.lock().unwrap();
+                if let Some(mut old) = guard.take() {
+                    let _ = old.kill();
+                    let _ = old.wait();
+                }
+            }
+            if uptime.as_secs() >= MIN_UPTIME_FOR_RESET_SECS {
+                attempt = 0;
+            } else {
+                attempt += 1;
+            }
+            if attempt > MAX_RESTART_ATTEMPTS {
+                let _ = app_handle.emit(
+                    "sidecar-status",
+                    SidecarStatus {
+                        status: "failed".into(),
+                        attempt,
+                    },
+                );
+                return;
+            }
+            let _ = app_handle.emit(
+                "sidecar-status",
+                SidecarStatus {
+                    status: "restarting".into(),
+                    attempt,
+                },
+            );
+            let delay = std::cmp::min(2u64.pow(attempt.min(6)), 60);
+            std::thread::sleep(Duration::from_secs(delay));
+        }
+    });
+}
+
+async fn start_health_monitor(app_handle: tauri::AppHandle, shutdown: Arc<AtomicBool>) {
+    let client = match reqwest::Client::builder()
+        .timeout(Duration::from_secs(5))
+        .build()
+    {
+        Ok(c) => c,
+        Err(_) => return,
+    };
+
+    let mut consecutive_failures: u32 = 0;
+    let mut was_unreachable = false;
+
+    loop {
+        if shutdown.load(Ordering::SeqCst) {
+            return;
+        }
+
+        tokio::time::sleep(Duration::from_secs(5)).await;
+
+        if shutdown.load(Ordering::SeqCst) {
+            return;
+        }
+
+        let health_url = format!("http://{}:{}/api/health", BACKEND_HOST, BACKEND_PORT);
+        let result = client.get(&health_url).send().await;
+
+        match result {
+            Ok(resp) if resp.status().is_success() => {
+                consecutive_failures = 0;
+                if was_unreachable {
+                    was_unreachable = false;
+                    let _ = app_handle.emit("sidecar-status", SidecarStatus {
+                        status: "connected".into(),
+                        attempt: 0,
+                    });
+                }
+            }
+            _ => {
+                consecutive_failures += 1;
+                if consecutive_failures >= 3 && !was_unreachable {
+                    was_unreachable = true;
+                    let _ = app_handle.emit("sidecar-status", SidecarStatus {
+                        status: "unreachable".into(),
+                        attempt: consecutive_failures,
+                    });
+                }
+            }
+        }
     }
 }
 
@@ -39,10 +240,17 @@ fn greet(name: &str) -> String {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    tauri::Builder::default()
+    let shared_child: SharedChild = Arc::new(Mutex::new(None));
+    let shutdown = Arc::new(AtomicBool::new(false));
+
+    // Build separately so we can pass shared_child to both
+    // the setup closure (via managed state) and the run callback
+    let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![greet])
-        .setup(|app| {
+        .manage(shared_child.clone())
+        .manage(shutdown.clone())
+        .setup(move |app| {
             let url = if cfg!(debug_assertions) {
                 DEV_URL.to_string()
             } else {
@@ -57,20 +265,27 @@ pub fn run() {
                         "qaztriber-backend"
                     });
 
-                let child = Command::new(&resource_path)
-                    .stdout(Stdio::null())
-                    .stderr(Stdio::null())
-                    .spawn()?;
+                spawn_sidecar_thread(app.handle().clone(), resource_path, shared_child.clone());
 
-                app.manage(SidecarProcess(child));
-
+                // BUG S2: improved error message — keep wait_for_backend so the
+                // webview doesn't show a connection error on first load
                 if !wait_for_backend(BACKEND_STARTUP_TIMEOUT_SECS) {
                     return Err(format!(
-                        "Backend не запустился за {} секунд",
+                        "Бэкенд не запустился за {} сек. Проверьте логи в Settings → Debug.",
                         BACKEND_STARTUP_TIMEOUT_SECS
                     )
                     .into());
                 }
+
+                // Start health monitor after backend is confirmed ready
+                let shutdown_for_health = shutdown.clone();
+                let app_handle_for_health = app.handle().clone();
+                std::thread::spawn(move || {
+                    let rt = tokio::runtime::Runtime::new().expect("failed to create tokio runtime");
+                    rt.block_on(async move {
+                        start_health_monitor(app_handle_for_health, shutdown_for_health).await;
+                    });
+                });
 
                 format!("http://{}:{}", BACKEND_HOST, BACKEND_PORT)
             };
@@ -84,6 +299,25 @@ pub fn run() {
 
             Ok(())
         })
-        .run(tauri::generate_context!())
-        .expect("error while running tauri application");
+        .build(tauri::generate_context!())
+        .expect("error while building tauri application");
+
+    // BUG C1: kill sidecar on app exit via RunEvent
+    app.run(move |app_handle, event| {
+        if let RunEvent::ExitRequested { .. } = event {
+            // Signal health monitor to stop
+            if let Some(shutdown) = app_handle.try_state::<Arc<AtomicBool>>() {
+                shutdown.store(true, Ordering::SeqCst);
+            }
+            // Kill sidecar
+            if let Some(shared) = app_handle.try_state::<SharedChild>() {
+                if let Ok(mut guard) = shared.lock() {
+                    if let Some(mut child) = guard.take() {
+                        let _ = child.kill();
+                        let _ = child.wait();
+                    }
+                }
+            }
+        }
+    });
 }

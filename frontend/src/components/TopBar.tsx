@@ -18,8 +18,14 @@ const VIEW_CRUMB: Record<View, string> = {
   settings: "nav.management",
 };
 
-export function TopBar() {
-  const { view, navigate, currentSessionId, lang, setLang, prefs, setPrefs, models, t } = useApp();
+interface TopBarProps {
+  onOpenDownloadModal?: () => void;
+}
+
+export function TopBar({ onOpenDownloadModal }: TopBarProps) {
+  const { view, navigate, currentSessionId, lang, setLang, prefs, setPrefs, models, preload, t } = useApp();
+
+  const showDownloadIndicator = preload && (preload.status === "downloading" || preload.status === "paused");
 
   return (
     <header className="topbar">
@@ -53,6 +59,33 @@ export function TopBar() {
             );
           })}
         </div>
+      )}
+
+      {/* Download indicator */}
+      {showDownloadIndicator && (
+        <button
+          className="download-indicator compact-btn"
+          onClick={onOpenDownloadModal}
+          title={t("download.title")}
+          style={{
+            display: "inline-flex",
+            alignItems: "center",
+            gap: "var(--sp-1)",
+            fontSize: 12,
+            fontWeight: 600,
+            padding: "4px 10px",
+            borderRadius: "var(--r-sm)",
+            border: "1px solid var(--border-soft)",
+            background: "var(--overlay-bg)",
+            color: "var(--gold-shimmer)",
+            cursor: "pointer",
+          }}
+        >
+          <Icon name="autorenew" size={16} />
+          <span style={{ fontFamily: "var(--font-mono)" }}>
+            {Math.round((preload?.progress ?? 0) * 100)}%
+          </span>
+        </button>
       )}
 
       {/* Language switch */}

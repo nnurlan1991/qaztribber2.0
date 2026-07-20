@@ -1,6 +1,9 @@
 """Tauri sidecar: поднимает локальный API. Окно открывает Tauri."""
 from __future__ import annotations
 
+import logging
+import sys
+
 import uvicorn
 
 from backend.app.main import app
@@ -11,9 +14,25 @@ PORT = 8765
 
 def main() -> None:
     # PyInstaller запускает Windows-версию без консоли: sys.stdout/sys.stderr
-    # могут быть None. Стандартный цветной логгер Uvicorn вызывает isatty() и
-    # из-за этого падает ещё до старта сервера. Логи для sidecar не нужны,
-    # поэтому полностью отключаем его конфигурацию.
+    # могут быть None. Uvicorn вызывает isatty() для цветного вывода и падает.
+    #
+    # Defense-in-depth: даже если PYTHONUTF8 env var не установлен (например,
+    # в dev-режиме), перенастраиваем stdout/stderr на UTF-8. errors="replace"
+    # предотвращает крах на недекодируемых байтах — они становятся ? вместо
+    # возбуждения UnicodeEncodeError.
+    if sys.stdout is not None:
+        try:
+            sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+    if sys.stderr is not None:
+        try:
+            sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+        except (AttributeError, ValueError):
+            pass
+    # Логирование настроено в backend.app.main lifespan через init_logging()
+    # (RotatingFileHandler в sidecar.log). Uvicorn-конфиг отключён, чтобы
+    # избежать дублирования обработчиков.
     config = uvicorn.Config(
         app,
         host=HOST,
@@ -21,6 +40,9 @@ def main() -> None:
         log_config=None,
         access_log=False,
     )
+    # Подавляем шумные access-логи uvicorn, но оставляем error-логи
+    logging.getLogger("uvicorn").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
     server = uvicorn.Server(config)
     # Главный поток — процесс живёт, пока Tauri не завершит его.
     server.run()

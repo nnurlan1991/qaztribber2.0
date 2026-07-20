@@ -10,12 +10,14 @@ from fastapi.staticfiles import StaticFiles
 
 from .api.transcriptions import router
 from .config import settings
+from .logging_config import init_logging
 from .services.gigaam import GigaAMService, ModelPreloadManager
 from .services.jobs import JobManager
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    init_logging(settings.app_data_dir)
     settings.ensure_directories()
     app.state.gigaam = GigaAMService(settings.models_dir)
     app.state.preload = ModelPreloadManager(app.state.gigaam)

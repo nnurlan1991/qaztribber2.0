@@ -21,7 +21,7 @@ export type Job = {
 };
 
 export type Result = { id: string; text: string; model: "220m" | "600m"; expected_language: "kazakh" | "russian" | "mixed"; duration_seconds: number | null };
-export type Preload = { status: "idle" | "downloading" | "completed" | "failed"; progress: number; stage: string; error: string | null };
+export type Preload = { status: "idle" | "downloading" | "completed" | "failed" | "cancelled" | "paused"; progress: number; stage: string; error: string | null };
 
 export type SystemInfo = {
   device: string;
@@ -52,6 +52,9 @@ export const deleteJob = (jobId: string) => request<void>(`/api/transcriptions/$
 export const getPreload = () => request<Preload>("/api/models/preload");
 export const startPreload = () => request<Preload>("/api/models/preload", { method: "POST" });
 export const getSystemInfo = () => request<SystemInfo>("/api/system");
+export const isFirstLaunch = () => request<{ first_launch: boolean }>("/api/first-launch");
+export const markInitialized = () => request<{ initialized: boolean }>("/api/first-launch/initialize", { method: "POST" });
+export const cancelPreload = () => request<Preload>("/api/models/preload/cancel", { method: "POST" });
 export const getJob = (jobId: string) => request<Job>(`/api/transcriptions/${jobId}`);
 
 export async function createJob(file: File, model: Model["id"], expectedLanguage: Job["expected_language"], start: number, end: number): Promise<Job> {
