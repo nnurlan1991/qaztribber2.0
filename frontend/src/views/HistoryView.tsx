@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import { deleteJob } from "../api";
+import { cancelJob, deleteJob } from "../api";
 import { useApp } from "../store";
 import { Icon } from "../icons";
 import { Modal } from "../components/Modal";
@@ -42,6 +42,18 @@ export function HistoryView() {
   async function deleteOne(id: string) {
     await deleteJob(id).catch(() => undefined);
     removeSessions([id]);
+  }
+
+  async function handleStop(id: string) {
+    // Optimistically update status to cancelled
+    patchSession(id, { status: "cancelled" });
+    try {
+      await cancelJob(id);
+      // Status already updated optimistically
+    } catch (_err) {
+      // Revert optimistic update on error — best guess is "transcribing"
+      patchSession(id, { status: "transcribing" });
+    }
   }
 
   function startRename(id: string, current: string | null) {
@@ -113,6 +125,11 @@ export function HistoryView() {
                 </div>
                 {!selectMode && (
                   <div className="row-actions">
+                    {["queued", "preparing", "loading_model", "transcribing"].includes(s.status) && (
+                      <button className="icon-btn danger" style={{ width: 32, height: 32 }} onClick={(e) => { e.stopPropagation(); handleStop(s.id); }} title={t("history.stop")}>
+                        <Icon name="stop" size={16} />
+                      </button>
+                    )}
                     <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={(e) => { e.stopPropagation(); startRename(s.id, s.displayName); }} title={t("session.rename")}><Icon name="edit" size={16} /></button>
                     <button className="icon-btn danger" style={{ width: 32, height: 32 }} onClick={(e) => { e.stopPropagation(); deleteOne(s.id); }} title={t("session.delete")}><Icon name="delete" size={16} /></button>
                   </div>

@@ -115,6 +115,7 @@ const ru: Dict = {
   "history.exitSelect": "Готово",
   "history.count": "сессий",
   "history.clearAll": "Очистить всё",
+  "history.stop": "Остановить",
 
   // Models
   "models.title": "Управление моделями",
@@ -342,6 +343,7 @@ const kz: Dict = {
   "history.exitSelect": "Дайын",
   "history.count": "сессия",
   "history.clearAll": "Барлығын тазалау",
+  "history.stop": "Тоқтату",
 
   "models.title": "Модельдерді басқару",
   "models.subtitle": "GigaAM Multilingual · жүктеп алғаннан кейін офлайн жұмыс істейді",
