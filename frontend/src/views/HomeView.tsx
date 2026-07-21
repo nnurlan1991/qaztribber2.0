@@ -311,14 +311,18 @@ export function HomeView() {
         </div>
       )}
 
-      {/* Compact hero: record + language + transcribe */}
+      {/* Compact hero: title | record | language | transcribe */}
       <section className="card home-hero-compact gold-edge">
-        {/* ЗОНА A: заголовок + кнопка записи */}
+        {/* ЗОНА A: только заголовок */}
         <div className="hero-zone hero-zone-a">
           <div className="hero-text">
             <h1>{t("home.title")}</h1>
             <div className="sub">{t("home.subtitle")}</div>
           </div>
+        </div>
+
+        {/* ЗОНА R: кнопка записи (отдельно от заголовка) */}
+        <div className="hero-zone hero-zone-r">
           <div className="home-rec-cluster">
             <button className={`rec-btn ${recording ? "recording" : ""}`} disabled={busy} onClick={toggleRecording} aria-label={recording ? "Stop" : "Record"}>
               <Icon name={recording ? "stop" : "mic"} fill size={26} />

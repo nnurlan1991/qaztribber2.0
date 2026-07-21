@@ -411,16 +411,13 @@ a { color: inherit; text-decoration: none; }
 .hero-zone:first-child { padding-left: 0; }
 .hero-zone:last-child { padding-right: 0; }
 .hero-zone + .hero-zone { border-left: 1px solid var(--border-soft); }
-/* Zone A (title + record button) — always stays together, never wraps */
+
+/* Zone A: title only — takes available space, title stays on one line */
 .hero-zone-a {
   flex: 1 1 auto;
   min-width: 0;
-  flex-wrap: nowrap;
-  white-space: nowrap;
 }
-.hero-zone-b { flex: 0 0 auto; }
-.hero-zone-c { flex: 0 0 auto; margin-left: auto; }
-.home-hero-compact .hero-text { min-width: 0; flex: 0 1 auto; }
+.home-hero-compact .hero-text { min-width: 0; flex: 1; }
 .home-hero-compact h1 { margin: 0; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; }
 .home-hero-compact .sub {
   font-size: 12px;
@@ -430,30 +427,34 @@ a { color: inherit; text-decoration: none; }
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* Zone R: record button — fixed width, never shrinks */
+.hero-zone-r {
+  flex: 0 0 auto;
+}
 .home-rec-cluster { display: flex; align-items: center; gap: var(--sp-3); flex: 0 0 auto; }
 .home-rec-cluster .rec-btn { width: 56px; height: 56px; border-radius: var(--r-md); flex-shrink: 0; }
 .home-rec-cluster .rec-btn .ms { font-size: 26px; }
 .home-rec-cluster .rec-ring, .home-rec-cluster .rec-ring.r2 { display: none; }
 .rec-timer-text { font-family: var(--font-mono); font-size: 14px; font-weight: 700; color: var(--gold-shimmer); flex-shrink: 0; }
 .rec-timer-text.live { color: var(--status-rec); }
+
+.hero-zone-b { flex: 0 0 auto; }
+.hero-zone-c { flex: 0 0 auto; margin-left: auto; }
 .toolbar-row { display: flex; align-items: center; gap: var(--sp-3); flex-wrap: nowrap; }
+
 @media (max-width: 1000px) {
   .home-hero-compact { flex-wrap: wrap; }
-  /* Zone A (title + record) stays fixed at top — never wraps internally */
-  .hero-zone-a {
-    flex: 1 1 100%;
-    border-left: none;
-    padding-left: 0;
-    flex-wrap: nowrap;
-    white-space: nowrap;
-  }
-  .hero-zone-b { order: 3; flex: 1 1 100%; border-left: none; border-top: 1px solid var(--border-soft); padding-top: var(--sp-4); margin-top: var(--sp-2); }
-  .hero-zone-c { order: 2; }
+  /* Zone A (title) stays full width on first row */
+  .hero-zone-a { flex: 1 1 100%; border-left: none; padding-left: 0; }
+  /* Zone R (record) goes to second row with B and C */
+  .hero-zone-r { order: 2; border-left: none; border-top: 1px solid var(--border-soft); padding-top: var(--sp-3); padding-left: 0; margin-top: var(--sp-2); }
+  .hero-zone-b { order: 3; border-left: none; border-top: 1px solid var(--border-soft); padding-top: var(--sp-3); }
+  .hero-zone-c { order: 4; }
 }
 @media (max-width: 640px) {
   .home-hero-compact { padding: var(--sp-3); }
   .hero-zone { padding: 0 var(--sp-2); gap: var(--sp-2); }
-  .hero-zone-a { gap: var(--sp-3); }
   .home-hero-compact h1 { font-size: 17px; }
   .home-hero-compact .sub { font-size: 11px; }
   .home-rec-cluster .rec-btn { width: 48px; height: 48px; }
