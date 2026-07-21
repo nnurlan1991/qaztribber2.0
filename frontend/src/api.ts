@@ -1,3 +1,7 @@
+import { invoke } from "@tauri-apps/api/core";
+
+export type ModelsStoragePath = { path: string; exists: boolean };
+
 export type LogEntry = {
   timestamp: string;
   level: string;
@@ -66,6 +70,7 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 }
 
 export const getModels = () => request<Model[]>("/api/models");
+export const getModelsStoragePath = () => request<ModelsStoragePath>("/api/models/storage-path");
 export const deleteModel = (modelId: Model["id"]) => request<void>(`/api/models/${modelId}`, { method: "DELETE" });
 export const getResult = (jobId: string) => request<Result>(`/api/transcriptions/${jobId}/result`);
 export const cancelJob = (jobId: string) => request<Job>(`/api/transcriptions/${jobId}/cancel`, { method: "POST" });
@@ -73,7 +78,24 @@ export const pauseJob = (jobId: string) => request<Job>(`/api/transcriptions/${j
 export const resumeJob = (jobId: string) => request<Job>(`/api/transcriptions/${jobId}/resume`, { method: "POST" });
 export const deleteJob = (jobId: string) => request<void>(`/api/transcriptions/${jobId}`, { method: "DELETE" });
 export const getPreload = () => request<Preload>("/api/models/preload");
-export const startPreload = (models?: string[]) => request<Preload>("/api/models/preload", { method: "POST", body: JSON.stringify(models), headers: { "Content-Type": "application/json" } });
+export const startPreload = (models?: string[]) => request<Preload>("/api/models/preload", {
+  method: "POST",
+  body: JSON.stringify({ models: models ?? null }),
+  headers: { "Content-Type": "application/json" },
+});
+
+/**
+ * Opens a folder in the native file manager (Finder / Explorer).
+ * Returns true if opened, false if path doesn't exist or not in Tauri context.
+ */
+export async function openFolder(path: string): Promise<boolean> {
+  try {
+    return await invoke<boolean>("open_folder", { path });
+  } catch {
+    // Not in Tauri context (dev browser) or invoke failed
+    return false;
+  }
+}
 export const getSystemInfo = () => request<SystemInfo>("/api/system");
 export const isFirstLaunch = () => request<{ first_launch: boolean }>("/api/first-launch");
 export const markInitialized = () => request<{ initialized: boolean }>("/api/first-launch/initialize", { method: "POST" });

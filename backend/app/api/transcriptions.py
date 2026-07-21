@@ -12,7 +12,7 @@ from fastapi import APIRouter, File, Form, HTTPException, Query, Request, Upload
 from fastapi.responses import FileResponse, StreamingResponse
 
 from ..config import settings
-from ..schemas import JobResponse, JobStatus, ModelResponse, PreloadResponse, ResultResponse, SessionResponse, SystemInfoResponse
+from ..schemas import JobResponse, JobStatus, ModelResponse, ModelsStoragePathResponse, PreloadRequest, PreloadResponse, ResultResponse, SessionResponse, SystemInfoResponse
 from ..services.gigaam import GigaAMService, MODELS, ModelPreloadManager
 from ..services.jobs import Job, JobManager
 
@@ -58,6 +58,14 @@ def models(request: Request) -> list[ModelResponse]:
         ModelResponse(**definition.__dict__, **gigaam.model_info(model_id))
         for model_id, definition in MODELS.items()
     ]
+
+
+@router.get("/models/storage-path", response_model=ModelsStoragePathResponse)
+def models_storage_path(request: Request) -> ModelsStoragePathResponse:
+    """Returns the directory where model checkpoints are stored."""
+    gigaam = request.app.state.gigaam
+    path = gigaam.models_dir
+    return ModelsStoragePathResponse(path=str(path), exists=path.is_dir())
 
 
 @router.get("/system", response_model=SystemInfoResponse)
@@ -153,10 +161,18 @@ def preload_status(request: Request) -> PreloadResponse:
 
 
 @router.post("/models/preload", response_model=PreloadResponse, status_code=202)
-def preload_models(request: Request, models: list[str] | None = None) -> PreloadResponse:
+def preload_models(request: Request, body: PreloadRequest | None = None) -> PreloadResponse:
+    """Start downloading selected models (or all if body omitted).
+
+    Body: ``{"models": ["220m", "600m"]}`` or ``null`` to download all.
+    Without explicit body, FastAPI treats ``models`` as a query parameter —
+    which previously caused silent download of ALL models regardless of user
+    selection. We now require the JSON body form.
+    """
     if request.app.state.preload.status == "downloading":
         return preload_response(request.app.state.preload)
-    return PreloadResponse(**request.app.state.preload.start(models))  # type: ignore[arg-type]
+    selected = body.models if body and body.models else None
+    return PreloadResponse(**request.app.state.preload.start(selected))  # type: ignore[arg-type]
 
 
 @router.post("/models/preload/cancel", response_model=PreloadResponse)

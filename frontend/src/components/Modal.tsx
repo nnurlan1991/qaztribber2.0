@@ -7,11 +7,12 @@ interface ModalProps {
   confirmLabel?: string;
   cancelLabel?: string;
   danger?: boolean;
+  confirmDisabled?: boolean;
   onConfirm?: () => void;
   onClose: () => void;
 }
 
-export function Modal({ title, children, confirmLabel, cancelLabel, danger, onConfirm, onClose }: ModalProps) {
+export function Modal({ title, children, confirmLabel, cancelLabel, danger, confirmDisabled, onConfirm, onClose }: ModalProps) {
   const { t } = useApp();
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -27,7 +28,14 @@ export function Modal({ title, children, confirmLabel, cancelLabel, danger, onCo
         <div className="modal-actions mt-6">
           <button className="btn btn-ghost sm" onClick={onClose}>{cancelLabel ?? t("common.cancel")}</button>
           {onConfirm && (
-            <button className={`btn sm ${danger ? "btn-danger" : "btn-gold"}`} onClick={onConfirm}>{confirmLabel ?? t("common.confirm")}</button>
+            <button
+              className={`btn sm ${danger ? "btn-danger" : "btn-gold"}`}
+              onClick={onConfirm}
+              disabled={confirmDisabled}
+              style={confirmDisabled ? { opacity: 0.5, cursor: "not-allowed" } : undefined}
+            >
+              {confirmLabel ?? t("common.confirm")}
+            </button>
           )}
         </div>
       </div>

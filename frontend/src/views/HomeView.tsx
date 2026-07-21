@@ -13,7 +13,7 @@ import type { Job, Model } from "../api";
 const terminalStatuses = new Set<Job["status"]>(["completed", "failed", "cancelled"]);
 
 export function HomeView() {
-  const { t, models, preload, prefs, sessions, upsertSession, patchSession, navigate, setError, error, refreshPreload, systemInfo } = useApp();
+  const { t, models, preload, prefs, sessions, upsertSession, patchSession, navigate, setError, error, systemInfo } = useApp();
 
   const [selectedModel, setSelectedModel] = useState<Model["id"]>(prefs.defaultModel);
   const [expectedLanguage, setExpectedLanguage] = useState<Job["expected_language"]>("mixed");
@@ -98,9 +98,6 @@ export function HomeView() {
       window.setTimeout(() => run(pendingModel.current ?? undefined), 0);
     }
   }, [preload?.status, pendingRun, file]);
-
-  const selected = useMemo(() => models.find((m) => m.id === selectedModel), [models, selectedModel]);
-  const busy = job !== null && !terminalStatuses.has(job.status);
 
   function selectFile(nextFile: File, source: SourceType = "file") {
     if (audioUrl) URL.revokeObjectURL(audioUrl);
@@ -216,25 +213,20 @@ export function HomeView() {
     window.setTimeout(() => setCopied(false), 1800);
   }
 
-  async function preloadModels() {
-    try { setError(null); await startPreload(); await refreshPreload(); } catch (reason) { setError(reason instanceof Error ? reason.message : t("error.preload")); }
-  }
-
   async function handleDownloadForTranscribe(modelId: Model["id"]) {
     setShowModelDialog(false);
     pendingModel.current = modelId;
     try {
       setError(null);
-      await startPreload();
-      await refreshPreload();
+      await startPreload([modelId]);
     } catch (reason) {
       setPendingRun(false);
       setError(reason instanceof Error ? reason.message : t("error.preload"));
     }
   }
 
-  const allCached = models.length > 0 && models.every((m) => m.cached);
-  const downloading = preload?.status === "downloading";
+  const selected = useMemo(() => models.find((m) => m.id === selectedModel), [models, selectedModel]);
+  const busy = job !== null && !terminalStatuses.has(job.status);
   const canRun = !!file && !busy && !recording;
 
   // ETA: estimated processing time based on audio duration × device speed multiplier
@@ -394,22 +386,6 @@ export function HomeView() {
                   <div className="progress thin" style={{ flex: 1 }}><i style={{ width: "100%" }} /></div>
                 </div>
               )}
-            </div>
-          )}
-
-          {/* Preload banner (only if models missing) */}
-          {!allCached && (
-            <div style={{ flex: "0 0 auto", padding: "var(--sp-3)", borderRadius: "var(--r-sm)", background: "var(--overlay-bg)", border: "1px solid var(--border-soft)" }}>
-              <div className="row-flex between gap-2" style={{ flexWrap: "wrap" }}>
-                <div className="row-flex gap-2">
-                  <Icon name="cloud_download" size={16} />
-                  <span style={{ fontSize: 12 }}>{preload?.stage ?? t("models.downloadAll")}</span>
-                </div>
-                <button className="btn btn-soft sm" disabled={downloading} onClick={preloadModels}>
-                  {downloading ? <><Icon name="autorenew" size={14} />{t("models.downloading")}</> : t("models.downloadAll")}
-                </button>
-              </div>
-              {downloading && preload && <div className="mt-2"><ProgressBar value={preload.progress} /></div>}
             </div>
           )}
         </section>

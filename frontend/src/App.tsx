@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { AppProvider, useApp } from "./store";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
+import { DownloadStatusBar } from "./components/DownloadStatusBar";
 import { Icon } from "./icons";
 import { HomeView } from "./views/HomeView";
 import { HistoryView } from "./views/HistoryView";
@@ -143,6 +144,7 @@ function Shell() {
         className="main"
         style={{ paddingTop: sidecarStatus && sidecarStatus !== "connected" ? 40 : 0 }}
       >
+        <DownloadStatusBar onOpenDetails={() => setShowDownloadModal(true)} />
         <TopBar onOpenDownloadModal={() => setShowDownloadModal(true)} />
         <ViewRouter />
       </main>

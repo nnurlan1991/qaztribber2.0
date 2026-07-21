@@ -238,6 +238,38 @@ fn greet(name: &str) -> String {
     format!("Hello, {}! This is QazTriber.", name)
 }
 
+/// Opens a directory in the native file manager (Finder on macOS, Explorer on Windows).
+/// Returns true if the directory was opened (or already open), false if path is missing.
+#[tauri::command]
+fn open_folder(path: String) -> Result<bool, String> {
+    use std::path::Path;
+    use std::process::Command;
+
+    let target = Path::new(&path);
+    if !target.is_dir() {
+        return Ok(false);
+    }
+
+    let result = if cfg!(target_os = "windows") {
+        Command::new("explorer")
+            .arg(&path)
+            .spawn()
+    } else if cfg!(target_os = "macos") {
+        Command::new("open")
+            .arg(&path)
+            .spawn()
+    } else {
+        Command::new("xdg-open")
+            .arg(&path)
+            .spawn()
+    };
+
+    match result {
+        Ok(_) => Ok(true),
+        Err(e) => Err(format!("Не удалось открыть папку: {}", e)),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let shared_child: SharedChild = Arc::new(Mutex::new(None));
@@ -247,7 +279,7 @@ pub fn run() {
     // the setup closure (via managed state) and the run callback
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet])
+        .invoke_handler(tauri::generate_handler![greet, open_folder])
         .manage(shared_child.clone())
         .manage(shutdown.clone())
         .setup(move |app| {

@@ -80,6 +80,17 @@ class PreloadResponse(BaseModel):
     models: list[ModelDownloadStatus] = Field(default_factory=list)
 
 
+class PreloadRequest(BaseModel):
+    """Body for POST /api/models/preload — explicitly lists models to download."""
+    models: list[Literal["220m", "600m"]] | None = None
+
+
+class ModelsStoragePathResponse(BaseModel):
+    """Path to the directory where model checkpoints are stored."""
+    path: str
+    exists: bool
+
+
 class SessionResponse(BaseModel):
     id: str
     status: str  # "completed" | "interrupted" | "failed" | "active"
