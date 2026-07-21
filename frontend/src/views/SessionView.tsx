@@ -164,15 +164,19 @@ export function SessionView() {
     try {
       const response = await fetch(`/api/transcriptions/${session.id}/source`);
       if (!response.ok) {
-        setError(t("session.audioMissing"));
+        setError(`${t("session.audioMissing")} (HTTP ${response.status})`);
         return;
       }
       const blob = await response.blob();
+      if (blob.size === 0) {
+        setError(t("session.audioMissing"));
+        return;
+      }
       const url = URL.createObjectURL(blob);
       setAudioUrl(url);
       setShowAudioPlayer(true);
-    } catch {
-      setError(t("session.audioMissing"));
+    } catch (err) {
+      setError(`${t("session.audioMissing")}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -182,10 +186,14 @@ export function SessionView() {
       // Fetch the source audio file
       const response = await fetch(`/api/transcriptions/${session.id}/source`);
       if (!response.ok) {
-        setError(t("session.audioMissing"));
+        setError(`${t("session.audioMissing")} (HTTP ${response.status})`);
         return;
       }
       const blob = await response.blob();
+      if (blob.size === 0) {
+        setError(t("session.audioMissing"));
+        return;
+      }
       const filename = session.originalFilename || `${session.id.slice(-8)}.audio`;
       const file = new File([blob], filename, { type: blob.type || "audio/wav" });
       // Pass to HomeView via store
@@ -197,8 +205,8 @@ export function SessionView() {
         originalFilename: filename,
       });
       navigate("home");
-    } catch {
-      setError(t("session.audioMissing"));
+    } catch (err) {
+      setError(`${t("session.audioMissing")}: ${err instanceof Error ? err.message : String(err)}`);
     }
   }
 
@@ -207,15 +215,23 @@ export function SessionView() {
     // Fetch directory path from API (works even after backend restart)
     try {
       const info = await getSessionFiles(session.id);
-      if (info.directory) {
-        setSessionDir(info.directory);
-        const opened = await openFolder(info.directory);
-        if (!opened) {
-          setError(t("session.openFolder"));
+      if (!info.directory) {
+        setError(t("session.openFolderError"));
+        return;
+      }
+      setSessionDir(info.directory);
+      const opened = await openFolder(info.directory);
+      if (!opened) {
+        // Fallback: copy path to clipboard so user can open manually
+        try {
+          await navigator.clipboard.writeText(info.directory);
+        } catch {
+          // Clipboard may be blocked
         }
+        setError(t("session.openFolderError"));
       }
     } catch {
-      setError(t("session.openFolder"));
+      setError(t("session.openFolderError"));
     }
   }
 

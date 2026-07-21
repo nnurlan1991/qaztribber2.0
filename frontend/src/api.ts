@@ -1,5 +1,5 @@
 import { invoke } from "@tauri-apps/api/core";
-import { openUrl as openerOpenUrl, openPath as openerOpenPath } from "@tauri-apps/plugin-opener";
+import { openUrl as openerOpenUrl, revealItemInDir as openerReveal } from "@tauri-apps/plugin-opener";
 
 export type ModelsStoragePath = { path: string; exists: boolean };
 
@@ -93,20 +93,36 @@ export const startPreload = (models?: string[]) => request<Preload>("/api/models
 
 /**
  * Opens a folder in the native file manager (Finder / Explorer).
- * Uses tauri-plugin-opener's openPath which handles all platform quirks.
- * Returns true if opened, false if not in Tauri context.
+ * Tries multiple methods since no single one works reliably across all
+ * Tauri 2 + WKWebView setups:
+ *  1. revealItemInDir (plugin-opener) — opens Finder with item highlighted
+ *  2. openUrl with file:// scheme — opens directory in Finder
+ *  3. Custom Tauri command (fallback, requires local IPC)
+ * Returns true if any method succeeded.
  */
 export async function openFolder(path: string): Promise<boolean> {
+  // Method 1: revealItemInDir — opens parent folder with item highlighted
   try {
-    await openerOpenPath(path);
+    await openerReveal(path);
     return true;
   } catch {
-    // Fallback: try custom command (kept for backwards compat)
-    try {
-      return await invoke<boolean>("open_folder", { path });
-    } catch {
-      return false;
-    }
+    // Continue to next method
+  }
+
+  // Method 2: openUrl with file:// scheme
+  try {
+    const fileUrl = `file://${encodeURIComponent(path).replace(/%2F/g, "/")}`;
+    await openerOpenUrl(fileUrl);
+    return true;
+  } catch {
+    // Continue to next method
+  }
+
+  // Method 3: custom Tauri command (fallback — only works with local IPC)
+  try {
+    return await invoke<boolean>("open_folder", { path });
+  } catch {
+    return false;
   }
 }
 
