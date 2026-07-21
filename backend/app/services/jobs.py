@@ -294,6 +294,11 @@ class JobManager:
         job.update_stage("done", "completed", 1.0, "Готово")
         job.text = text
         job.update(JobStatus.completed, "Готово", 1.0)
+        # Persist transcription.txt to disk so it survives backend restart
+        try:
+            (job.directory / "transcription.txt").write_text(text, encoding="utf-8")
+        except OSError:
+            pass
         # Update metadata.json with completion status
         metadata_path = job.directory / "metadata.json"
         if metadata_path.is_file():

@@ -1,3 +1,6 @@
+import { invoke } from "@tauri-apps/api/core";
+import { openUrl as openerOpenUrl, openPath as openerOpenPath } from "@tauri-apps/plugin-opener";
+
 export type ModelsStoragePath = { path: string; exists: boolean };
 
 export type LogEntry = {
@@ -90,39 +93,45 @@ export const startPreload = (models?: string[]) => request<Preload>("/api/models
 
 /**
  * Opens a folder in the native file manager (Finder / Explorer).
- * Returns true if opened, false if path doesn't exist or not in Tauri context.
+ * Uses tauri-plugin-opener's openPath which handles all platform quirks.
+ * Returns true if opened, false if not in Tauri context.
  */
 export async function openFolder(path: string): Promise<boolean> {
   try {
-    const tauriInternals = (window as unknown as { __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } }).__TAURI_INTERNALS__;
-    if (tauriInternals && typeof tauriInternals.invoke === "function") {
-      return (await tauriInternals.invoke("open_folder", { path })) as boolean;
-    }
+    await openerOpenPath(path);
+    return true;
   } catch {
-    // IPC failed
+    // Fallback: try custom command (kept for backwards compat)
+    try {
+      return await invoke<boolean>("open_folder", { path });
+    } catch {
+      return false;
+    }
   }
-  return false;
 }
 
 /**
- * Opens a URL in the default system browser. WKWebView blocks window.open()
- * for external URLs, so we shell out to the OS browser handler.
+ * Opens a URL in the default system browser.
+ * Uses tauri-plugin-opener's openUrl which handles all platform quirks.
  * Returns true if opened, false if all methods failed.
  */
 export async function openUrl(url: string): Promise<boolean> {
-  // Method 1: Tauri custom command (works when IPC is available)
+  // Method 1: tauri-plugin-opener (preferred — handles WKWebView quirk)
   try {
-    const tauriInternals = (window as unknown as { __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } }).__TAURI_INTERNALS__;
-    if (tauriInternals && typeof tauriInternals.invoke === "function") {
-      const result = await tauriInternals.invoke("open_url", { url });
-      if (result === true) return true;
-    }
+    await openerOpenUrl(url);
+    return true;
   } catch {
-    // IPC failed — try fallback
+    // Plugin failed — try fallbacks
   }
 
-  // Method 2: <a target="_blank"> click — tauri-plugin-opener auto-intercepts
-  // these clicks and opens them in the default browser
+  // Method 2: custom Tauri command
+  try {
+    return await invoke<boolean>("open_url", { url });
+  } catch {
+    // IPC failed
+  }
+
+  // Method 3: <a target="_blank"> click
   try {
     const a = document.createElement("a");
     a.href = url;
@@ -136,7 +145,7 @@ export async function openUrl(url: string): Promise<boolean> {
     // Fallback failed too
   }
 
-  // Method 3: window.open (may work in dev browser, blocked in WKWebView)
+  // Method 4: window.open (may work in dev browser, blocked in WKWebView)
   try {
     window.open(url, "_blank");
     return true;
@@ -153,11 +162,7 @@ export async function openUrl(url: string): Promise<boolean> {
 export async function saveAndOpenTxt(content: string, filename: string): Promise<string | null> {
   // Method 1: Tauri custom command
   try {
-    const tauriInternals = (window as unknown as { __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } }).__TAURI_INTERNALS__;
-    if (tauriInternals && typeof tauriInternals.invoke === "function") {
-      const result = await tauriInternals.invoke("save_and_open_txt", { content, filename }) as string;
-      if (result) return result;
-    }
+    return await invoke<string>("save_and_open_txt", { content, filename });
   } catch {
     // IPC failed — try fallback
   }

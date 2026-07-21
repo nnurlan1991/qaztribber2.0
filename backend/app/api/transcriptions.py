@@ -369,19 +369,94 @@ def resume_transcription(request: Request, job_id: str) -> JobResponse:
 
 @router.get("/transcriptions/{job_id}/result", response_model=ResultResponse)
 def transcription_result(request: Request, job_id: str) -> ResultResponse:
-    job = get_job(request, job_id)
-    if job.status != JobStatus.completed or job.text is None:
+    """Return transcription result.
+
+    Works for both in-memory jobs and on-disk-only sessions (after backend
+    restart). Falls back to reading transcription.txt + metadata.json from disk.
+    """
+    # Try in-memory job first (don't use get_job() — it raises 404 if not found)
+    job = manager(request).get(job_id)
+    if job and job.status == JobStatus.completed and job.text is not None:
+        return ResultResponse(
+            id=job.id, text=job.text, model=job.model,
+            expected_language=job.expected_language,
+            duration_seconds=job.duration_seconds,
+        )
+
+    # Fallback: read from disk
+    job_dir = settings.jobs_dir / job_id
+    text_path = job_dir / "transcription.txt"
+    metadata_path = job_dir / "metadata.json"
+
+    if not text_path.is_file():
         raise HTTPException(status_code=409, detail="Результат ещё не готов.")
-    return ResultResponse(id=job.id, text=job.text, model=job.model, expected_language=job.expected_language, duration_seconds=job.duration_seconds)  # type: ignore[arg-type]
+
+    try:
+        text = text_path.read_text(encoding="utf-8")
+    except OSError as e:
+        raise HTTPException(status_code=500, detail=f"Не удалось прочитать результат: {e}")
+
+    # Read model/language/duration from metadata
+    model = "220m"
+    expected_language = "mixed"
+    duration_seconds = None
+    if metadata_path.is_file():
+        try:
+            metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+            model = metadata.get("model", "220m")
+            expected_language = metadata.get("expected_language", "mixed")
+            duration_seconds = metadata.get("duration_seconds")
+        except (OSError, json.JSONDecodeError):
+            pass
+
+    return ResultResponse(
+        id=job_id, text=text, model=model,
+        expected_language=expected_language,
+        duration_seconds=duration_seconds,
+    )
 
 
 @router.get("/transcriptions/{job_id}/source")
 async def get_source_audio(job_id: str, request: Request):
-    """Return the original source audio file for retry operations."""
-    job = get_job(request, job_id)
-    if not job.source_path or not job.source_path.is_file():
-        raise HTTPException(status_code=404, detail="Source audio not available")
-    ext = job.source_path.suffix.lower()
+    """Return the original source audio file.
+
+    Works for both in-memory jobs and on-disk-only sessions (after backend
+    restart). Falls back to reading source file + metadata.json from disk.
+    """
+    # Try in-memory job first (don't use get_job() — it raises 404 if not found)
+    job = manager(request).get(job_id)
+    source_path = None
+    original_filename = None
+
+    if job and job.source_path and job.source_path.is_file():
+        source_path = job.source_path
+        original_filename = job.filename or job.source_path.name
+    else:
+        # Fallback: read from disk
+        job_dir = settings.jobs_dir / job_id
+        disk_source = job_dir / "source"
+        if not disk_source.is_file():
+            raise HTTPException(status_code=404, detail="Source audio not available")
+        source_path = disk_source
+        # Read original filename from metadata.json to determine extension
+        metadata_path = job_dir / "metadata.json"
+        if metadata_path.is_file():
+            try:
+                metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+                original_filename = metadata.get("filename")
+            except (OSError, json.JSONDecodeError):
+                pass
+
+    # Determine extension: prefer original filename, else fallback to 'source'
+    ext = ""
+    if original_filename and "." in original_filename:
+        ext = "." + original_filename.rsplit(".", 1)[-1].lower()
+    elif source_path.suffix:
+        ext = source_path.suffix.lower()
+    else:
+        # No extension on 'source' file — guess from original filename or default to webm
+        ext = ".webm"
+
     media_type = {
         ".wav": "audio/wav",
         ".mp3": "audio/mpeg",
@@ -390,10 +465,12 @@ async def get_source_audio(job_id: str, request: Request):
         ".flac": "audio/flac",
         ".webm": "audio/webm",
     }.get(ext, "application/octet-stream")
+
+    download_name = original_filename or f"{job_id}{ext}"
     return FileResponse(
-        path=str(job.source_path),
+        path=str(source_path),
         media_type=media_type,
-        filename=job.source_path.name,
+        filename=download_name,
     )
 
 
