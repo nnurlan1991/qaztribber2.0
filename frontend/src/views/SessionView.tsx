@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { deleteJob, getResult, getJob, pauseJob, resumeJob, cancelJob } from "../api";
+import { deleteJob, getResult, getJob, pauseJob, resumeJob, cancelJob, openUrl, saveAndOpenTxt } from "../api";
 import { useApp } from "../store";
 import { Icon } from "../icons";
 import { Modal } from "../components/Modal";
@@ -127,15 +127,24 @@ export function SessionView() {
 
   async function handleGemini() {
     if (!text) return;
+    const GEMINI_URL = "https://gemini.google.com/gem/1JBgcHx9CZmalO7WdJlQ2JBl9yUgAnKde?usp=sharing";
     try {
       await navigator.clipboard.writeText(text);
       setCopied(true);
       window.setTimeout(() => setCopied(false), 1800);
-      window.open("https://gemini.google.com/gem/1JBgcHx9CZmalO7WdJlQ2JBl9yUgAnKde?usp=sharing", "_blank");
     } catch {
-      // Fallback: open Gemini anyway, user can copy manually
-      window.open("https://gemini.google.com/gem/1JBgcHx9CZmalO7WdJlQ2JBl9yUgAnKde?usp=sharing", "_blank");
+      // Clipboard may be blocked — continue anyway, user can copy manually
     }
+    // Open in default browser via Tauri (window.open is blocked in WKWebView)
+    await openUrl(GEMINI_URL);
+  }
+
+  async function handleDownloadTxt() {
+    if (!text || !session) return;
+    // Build a readable filename from session display name or ID
+    const baseName = (session.displayName || session.originalFilename || session.id.slice(-8))
+      .replace(/\.[^.]+$/, ""); // strip extension if present
+    await saveAndOpenTxt(text, baseName);
   }
 
   function saveRename() {
@@ -226,7 +235,7 @@ export function SessionView() {
           <div className="row-flex gap-2">
             <button className="btn btn-soft sm" onClick={copyText} disabled={!text}><Icon name={copied ? "check" : "content_copy"} size={16} />{copied ? t("session.copied") : t("session.copy")}</button>
             <button className="btn btn-soft sm" onClick={handleGemini} disabled={!text} title={t("session.geminiHint")}><Icon name="bolt" size={16} />{t("session.gemini")}</button>
-            {text && <a className="btn btn-ghost sm" href={`/api/transcriptions/${session.id}/result.txt`} download><Icon name="download" size={16} />{t("session.download")}</a>}
+            <button className="btn btn-ghost sm" onClick={handleDownloadTxt} disabled={!text}><Icon name="download" size={16} />{t("session.download")}</button>
           </div>
         </div>
         <textarea

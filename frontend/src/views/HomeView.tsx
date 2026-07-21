@@ -1,5 +1,5 @@
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import { cancelJob, createJob, deleteJob, getResult, pauseJob, resumeJob, startPreload, watchJob } from "../api";
+import { cancelJob, createJob, deleteJob, getResult, pauseJob, resumeJob, startPreload, watchJob, saveAndOpenTxt } from "../api";
 import { jobToSession, useApp } from "../store";
 import { Icon } from "../icons";
 import { ProgressBar } from "../components/ProgressBar";
@@ -211,6 +211,12 @@ export function HomeView() {
     await navigator.clipboard.writeText(result.text);
     setCopied(true);
     window.setTimeout(() => setCopied(false), 1800);
+  }
+
+  async function handleDownloadTxt() {
+    if (!result) return;
+    const baseName = (file?.name || result.id.slice(-8)).replace(/\.[^.]+$/, "");
+    await saveAndOpenTxt(result.text, baseName);
   }
 
   async function handleDownloadForTranscribe(modelId: Model["id"]) {
@@ -432,7 +438,7 @@ export function HomeView() {
           {result && (
             <div className="result-actions-row">
               <button className="btn btn-soft sm" onClick={copyText}><Icon name={copied ? "check" : "content_copy"} size={14} />{copied ? t("session.copied") : t("session.copy")}</button>
-              <a className="btn btn-ghost sm" href={`/api/transcriptions/${result.id}/result.txt`} download><Icon name="download" size={14} />{t("session.download")}</a>
+              <button className="btn btn-ghost sm" onClick={handleDownloadTxt}><Icon name="download" size={14} />{t("session.download")}</button>
               <button className="btn btn-link sm" onClick={() => navigate("session", result.id)}>{t("session.metadata")} <Icon name="chevron_right" size={14} /></button>
               <button className="btn btn-link sm" onClick={reset} style={{ marginLeft: "auto" }}>{t("session.new")}</button>
             </div>

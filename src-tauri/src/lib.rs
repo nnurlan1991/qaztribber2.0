@@ -270,6 +270,93 @@ fn open_folder(path: String) -> Result<bool, String> {
     }
 }
 
+/// Opens a URL in the default browser. WKWebView blocks window.open() for external
+/// URLs, so we shell out to the OS default browser handler.
+#[tauri::command]
+fn open_url(url: String) -> Result<bool, String> {
+    use std::process::Command;
+
+    let result = if cfg!(target_os = "windows") {
+        Command::new("cmd")
+            .args(["/C", "start", "", &url])
+            .spawn()
+    } else if cfg!(target_os = "macos") {
+        Command::new("open")
+            .arg(&url)
+            .spawn()
+    } else {
+        Command::new("xdg-open")
+            .arg(&url)
+            .spawn()
+    };
+
+    match result {
+        Ok(_) => Ok(true),
+        Err(e) => Err(format!("Не удалось открыть URL: {}", e)),
+    }
+}
+
+/// Saves text content to a file in the system Downloads directory and opens it
+/// with the default application (TextEdit on macOS, Notepad on Windows).
+/// Returns the saved file path on success.
+#[tauri::command]
+fn save_and_open_txt(content: String, filename: String) -> Result<String, String> {
+    use std::fs;
+    use std::path::PathBuf;
+    use std::process::Command;
+
+    // Resolve Downloads directory without external crates (dirs is config-zone blocked)
+    let downloads_dir = if cfg!(target_os = "windows") {
+        std::env::var("USERPROFILE")
+            .map(PathBuf::from)
+            .map(|h| h.join("Downloads"))
+            .map_err(|_| "USERPROFILE not set".to_string())?
+    } else {
+        std::env::var("HOME")
+            .map(PathBuf::from)
+            .map(|h| h.join("Downloads"))
+            .map_err(|_| "HOME not set".to_string())?
+    };
+
+    fs::create_dir_all(&downloads_dir)
+        .map_err(|e| format!("Не удалось создать папку: {}", e))?;
+
+    // Sanitize filename — keep it simple, only alphanumerics + dash + .txt
+    let safe_name = filename
+        .chars()
+        .map(|c| if c.is_alphanumeric() || c == '-' || c == '.' { c } else { '_' })
+        .collect::<String>();
+    let file_path: PathBuf = downloads_dir.join(if safe_name.ends_with(".txt") {
+        safe_name
+    } else {
+        format!("{}.txt", safe_name)
+    });
+
+    fs::write(&file_path, &content)
+        .map_err(|e| format!("Не удалось сохранить файл: {}", e))?;
+
+    let path_str = file_path.to_string_lossy().to_string();
+
+    let result = if cfg!(target_os = "windows") {
+        Command::new("cmd")
+            .args(["/C", "start", "", "", &path_str])
+            .spawn()
+    } else if cfg!(target_os = "macos") {
+        Command::new("open")
+            .arg(&path_str)
+            .spawn()
+    } else {
+        Command::new("xdg-open")
+            .arg(&path_str)
+            .spawn()
+    };
+
+    match result {
+        Ok(_) => Ok(path_str),
+        Err(e) => Err(format!("Файл сохранён, но не удалось открыть: {}", e)),
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let shared_child: SharedChild = Arc::new(Mutex::new(None));
@@ -279,7 +366,7 @@ pub fn run() {
     // the setup closure (via managed state) and the run callback
     let app = tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![greet, open_folder])
+        .invoke_handler(tauri::generate_handler![greet, open_folder, open_url, save_and_open_txt])
         .manage(shared_child.clone())
         .manage(shutdown.clone())
         .setup(move |app| {

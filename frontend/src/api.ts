@@ -96,6 +96,48 @@ export async function openFolder(path: string): Promise<boolean> {
     return false;
   }
 }
+
+/**
+ * Opens a URL in the default system browser. WKWebView blocks window.open()
+ * for external URLs, so we shell out to the OS browser handler.
+ * Returns true if opened, false if not in Tauri context.
+ */
+export async function openUrl(url: string): Promise<boolean> {
+  try {
+    return await invoke<boolean>("open_url", { url });
+  } catch {
+    // Fallback: try window.open (may work in dev browser)
+    window.open(url, "_blank");
+    return false;
+  }
+}
+
+/**
+ * Saves text content to a .txt file in the Downloads directory and opens it
+ * with the default application (TextEdit on macOS, Notepad on Windows).
+ * Returns the saved file path, or null if not in Tauri context.
+ */
+export async function saveAndOpenTxt(content: string, filename: string): Promise<string | null> {
+  try {
+    return await invoke<string>("save_and_open_txt", { content, filename });
+  } catch {
+    // Fallback: not in Tauri context — try browser download
+    try {
+      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = filename.endsWith(".txt") ? filename : `${filename}.txt`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch {
+      // Last resort: ignore
+    }
+    return null;
+  }
+}
 export const getSystemInfo = () => request<SystemInfo>("/api/system");
 export const isFirstLaunch = () => request<{ first_launch: boolean }>("/api/first-launch");
 export const markInitialized = () => request<{ initialized: boolean }>("/api/first-launch/initialize", { method: "POST" });
