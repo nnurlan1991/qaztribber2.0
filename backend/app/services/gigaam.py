@@ -94,6 +94,7 @@ class ModelPreloadManager:
             self.progress = 0.0
             self.stage = "Подготовка загрузки моделей…"
             self.error = None
+            self.error_code = None
             # Determine which models to download
             if models:
                 self._models_to_download = [m for m in models if m in MODELS]
