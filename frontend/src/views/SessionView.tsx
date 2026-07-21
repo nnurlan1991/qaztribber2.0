@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { deleteJob, getResult, getJob } from "../api";
+import { deleteJob, getResult, getJob, pauseJob, resumeJob, cancelJob } from "../api";
 import { useApp } from "../store";
 import { Icon } from "../icons";
 import { Modal } from "../components/Modal";
@@ -125,6 +125,19 @@ export function SessionView() {
     setEditing(true);
   }
 
+  async function handleGemini() {
+    if (!text) return;
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+      window.open("https://gemini.google.com/gem/1JBgcHx9CZmalO7WdJlQ2JBl9yUgAnKde?usp=sharing", "_blank");
+    } catch {
+      // Fallback: open Gemini anyway, user can copy manually
+      window.open("https://gemini.google.com/gem/1JBgcHx9CZmalO7WdJlQ2JBl9yUgAnKde?usp=sharing", "_blank");
+    }
+  }
+
   function saveRename() {
     if (session) patchSession(session.id, { displayName: nameDraft.trim() || null });
     setEditing(false);
@@ -156,8 +169,16 @@ export function SessionView() {
             </div>
           </div>
           <div className="row-flex gap-1">
+            {session.status === "transcribing" && (
+              <button className="icon-btn" onClick={() => pauseJob(session.id).then((j) => patchSession(session.id, { status: j.status })).catch(() => {})} title={t("home.pause")}><Icon name="pause" size={20} /></button>
+            )}
+            {session.status === "paused" && (
+              <button className="icon-btn" onClick={() => resumeJob(session.id).then((j) => patchSession(session.id, { status: j.status })).catch(() => {})} title={t("home.resume")}><Icon name="play_arrow" size={20} /></button>
+            )}
+            {isActive && session.status !== "paused" && (
+              <button className="icon-btn danger" onClick={() => cancelJob(session.id).then((j) => patchSession(session.id, { status: j.status })).catch(() => {})} title={t("history.stop")}><Icon name="stop" size={20} /></button>
+            )}
             <button className="icon-btn" onClick={startRename} title={t("session.rename")}><Icon name="edit" size={20} /></button>
-            <button className="icon-btn" onClick={() => refreshFromApi()} title={t("common.retry")}><Icon name="refresh" size={20} /></button>
             <button className="icon-btn danger" onClick={() => setConfirmDelete(true)} title={t("session.delete")}><Icon name="delete" size={20} /></button>
           </div>
         </div>
@@ -204,6 +225,7 @@ export function SessionView() {
           <h2 className="h3">{t("session.transcript")}</h2>
           <div className="row-flex gap-2">
             <button className="btn btn-soft sm" onClick={copyText} disabled={!text}><Icon name={copied ? "check" : "content_copy"} size={16} />{copied ? t("session.copied") : t("session.copy")}</button>
+            <button className="btn btn-soft sm" onClick={handleGemini} disabled={!text} title={t("session.geminiHint")}><Icon name="bolt" size={16} />{t("session.gemini")}</button>
             {text && <a className="btn btn-ghost sm" href={`/api/transcriptions/${session.id}/result.txt`} download><Icon name="download" size={16} />{t("session.download")}</a>}
           </div>
         </div>

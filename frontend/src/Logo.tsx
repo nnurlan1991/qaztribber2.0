@@ -14,7 +14,13 @@ interface LogoProps {
 export function Logo({ size = 34, variant = "mark", className = "" }: LogoProps) {
   if (variant === "wordmark") return <Wordmark className={className} />;
   if (variant === "markLight") return <MarkLight size={size} className={className} />;
-  return <MarkDark size={size} className={className} />;
+  // Auto-switch: render both, CSS toggles based on data-theme
+  return (
+    <>
+      <MarkDark size={size} className={`logo-dark ${className}`} />
+      <MarkLight size={size} className={`logo-light ${className}`} />
+    </>
+  );
 }
 
 const GOLD_STOPS = (

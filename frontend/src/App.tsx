@@ -77,11 +77,11 @@ function Shell() {
     };
   }, []);
 
-  const handleDownloadModels = useCallback(async () => {
+  const handleDownloadModels = useCallback(async (models: string[]) => {
     try {
       await markInitialized();
       setShowOnboarding(false);
-      await startPreload();
+      await startPreload(models);
       setShowDownloadModal(true);
     } catch (reason) {
       setError((reason as Error).message);

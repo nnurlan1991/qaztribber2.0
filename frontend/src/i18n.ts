@@ -32,6 +32,7 @@ const ru: Dict = {
   // Home
   "home.title": "Студия расшифровки",
   "home.subtitle": "Запишите или импортируйте аудио — текст появится здесь",
+  "home.processing": "Обработка…",
   "home.record": "Запись",
   "home.stop": "Остановить",
   "home.recording": "Идёт запись",
@@ -84,6 +85,8 @@ const ru: Dict = {
   "session.title": "Сессия",
   "session.copy": "Скопировать",
   "session.copied": "Скопировано",
+  "session.gemini": "Gemini",
+  "session.geminiHint": "Скопировать текст и открыть Gemini",
   "session.download": "Скачать TXT",
   "session.share": "Поделиться",
   "session.delete": "Удалить",
@@ -121,6 +124,8 @@ const ru: Dict = {
   "history.stop": "Остановить",
   "history.retry": "Повторить",
   "history.retryFailed": "Не удалось получить исходный аудио файл",
+  "history.retryConfirm": "Повторить расшифровку?",
+  "history.retryConfirmText": "Будет создана новая сессия с теми же параметрами:",
   "history.progress": "Прогресс",
 
   // Models
@@ -221,11 +226,15 @@ const ru: Dict = {
   "download.failed": "Ошибка загрузки",
   "download.cancelled": "Загрузка отменена",
   "download.insufficientDiskSpace": "Недостаточно места на диске для загрузки модели",
+  "download.statusPending": "Ожидание",
+  "download.statusCompleted": "Завершено",
+  "download.statusFailed": "Ошибка",
 
   // Onboarding
   "onboarding.title": "Добро пожаловать в QazTriber",
   "onboarding.description": "Локальная расшифровка казахской, русской и смешанной речи. Модели работают офлайн.",
   "onboarding.downloadBoth": "Скачать обе модели",
+  "onboarding.downloadSelected": "Скачать выбранные",
   "onboarding.skip": "Пропустить",
   "onboarding.model220m": "Быстрая — 220M (~880 МБ)",
   "onboarding.model600m": "Точная — 600M (~2.3 ГБ)",
@@ -287,6 +296,7 @@ const kz: Dict = {
 
   "home.title": "Танылу студиясы",
   "home.subtitle": "Аудио жазып немесе импорттаңыз — мәтін осында пайда болады",
+  "home.processing": "Өңдеу…",
   "home.record": "Жазу",
   "home.stop": "Тоқтату",
   "home.recording": "Жазу барысында",
@@ -335,6 +345,8 @@ const kz: Dict = {
   "session.title": "Сессия",
   "session.copy": "Көшіру",
   "session.copied": "Көшірілді",
+  "session.gemini": "Gemini",
+  "session.geminiHint": "Мәтінді көшіріп, Gemini-ді ашу",
   "session.download": "TXT жүктеу",
   "session.share": "Бөлісу",
   "session.delete": "Жою",
@@ -371,6 +383,8 @@ const kz: Dict = {
   "history.stop": "Тоқтату",
   "history.retry": "Қайталау",
   "history.retryFailed": "Бастапқы аудио файлды алу сәтсіз аяқталды",
+  "history.retryConfirm": "Тануды қайталау керек пе?",
+  "history.retryConfirmText": "Сол параметрлермен жаңа сессия құрылады:",
   "history.progress": "Барысы",
 
   "models.title": "Модельдерді басқару",
@@ -467,11 +481,15 @@ const kz: Dict = {
   "download.failed": "Жүктеу қатесі",
   "download.cancelled": "Жүктеу тоқтатылды",
   "download.insufficientDiskSpace": "Модельді жүктеу үшін дискіде орын жеткіліксіз",
+  "download.statusPending": "Күтуде",
+  "download.statusCompleted": "Аяқталды",
+  "download.statusFailed": "Қате",
 
   // Onboarding
   "onboarding.title": "QazTriber-ге қош келдіңіз",
   "onboarding.description": "Қазақ, орыс және аралас сөйлеуді жергілікті тану. Модельдер офлайн жұмыс істейді.",
   "onboarding.downloadBoth": "Екі модельді жүктеу",
+  "onboarding.downloadSelected": "Таңдалғанды жүктеу",
   "onboarding.skip": "Өткізу",
   "onboarding.model220m": "Жылдам — 220M (~880 МБ)",
   "onboarding.model600m": "Дәл — 600M (~2.3 ГБ)",

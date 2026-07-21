@@ -153,8 +153,10 @@ def preload_status(request: Request) -> PreloadResponse:
 
 
 @router.post("/models/preload", response_model=PreloadResponse, status_code=202)
-def preload_models(request: Request) -> PreloadResponse:
-    return preload_response(request.app.state.preload) if request.app.state.preload.status == "downloading" else PreloadResponse(**request.app.state.preload.start())  # type: ignore[arg-type]
+def preload_models(request: Request, models: list[str] | None = None) -> PreloadResponse:
+    if request.app.state.preload.status == "downloading":
+        return preload_response(request.app.state.preload)
+    return PreloadResponse(**request.app.state.preload.start(models))  # type: ignore[arg-type]
 
 
 @router.post("/models/preload/cancel", response_model=PreloadResponse)

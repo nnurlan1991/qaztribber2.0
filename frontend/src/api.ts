@@ -36,7 +36,13 @@ export type Job = {
 };
 
 export type Result = { id: string; text: string; model: "220m" | "600m"; expected_language: "kazakh" | "russian" | "mixed"; duration_seconds: number | null };
-export type Preload = { status: "idle" | "downloading" | "completed" | "failed" | "cancelled" | "paused"; progress: number; stage: string; error: string | null; error_code: string | null };
+export type ModelDownloadStatus = {
+  model_id: "220m" | "600m";
+  status: "pending" | "downloading" | "completed" | "failed";
+  progress: number;
+};
+
+export type Preload = { status: "idle" | "downloading" | "completed" | "failed" | "cancelled" | "paused"; progress: number; stage: string; error: string | null; error_code: string | null; models: ModelDownloadStatus[] };
 
 export type SystemInfo = {
   device: string;
@@ -67,7 +73,7 @@ export const pauseJob = (jobId: string) => request<Job>(`/api/transcriptions/${j
 export const resumeJob = (jobId: string) => request<Job>(`/api/transcriptions/${jobId}/resume`, { method: "POST" });
 export const deleteJob = (jobId: string) => request<void>(`/api/transcriptions/${jobId}`, { method: "DELETE" });
 export const getPreload = () => request<Preload>("/api/models/preload");
-export const startPreload = () => request<Preload>("/api/models/preload", { method: "POST" });
+export const startPreload = (models?: string[]) => request<Preload>("/api/models/preload", { method: "POST", body: JSON.stringify(models), headers: { "Content-Type": "application/json" } });
 export const getSystemInfo = () => request<SystemInfo>("/api/system");
 export const isFirstLaunch = () => request<{ first_launch: boolean }>("/api/first-launch");
 export const markInitialized = () => request<{ initialized: boolean }>("/api/first-launch/initialize", { method: "POST" });

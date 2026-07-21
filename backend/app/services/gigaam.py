@@ -62,6 +62,9 @@ class ModelPreloadManager:
         self.error_code: str | None = None
         self._lock = threading.RLock()
         self._cancelled = threading.Event()
+        self._model_status: dict[str, dict[str, object]] = {
+            mid: {"status": "pending", "progress": 0.0} for mid in MODELS
+        }
         self._restore_status()
 
     # ------------------------------------------------------------------
@@ -70,9 +73,19 @@ class ModelPreloadManager:
 
     def snapshot(self) -> dict[str, object]:
         with self._lock:
-            return {"status": self.status, "progress": self.progress, "stage": self.stage, "error": self.error, "error_code": self.error_code}
+            return {
+                "status": self.status,
+                "progress": self.progress,
+                "stage": self.stage,
+                "error": self.error,
+                "error_code": self.error_code,
+                "models": [
+                    {"model_id": mid, "status": s["status"], "progress": s["progress"]}
+                    for mid, s in self._model_status.items()
+                ],
+            }
 
-    def start(self) -> dict[str, object]:
+    def start(self, models: list[str] | None = None) -> dict[str, object]:
         with self._lock:
             if self.status == "downloading":
                 return self.snapshot()
@@ -81,6 +94,17 @@ class ModelPreloadManager:
             self.progress = 0.0
             self.stage = "Подготовка загрузки моделей…"
             self.error = None
+            # Determine which models to download
+            if models:
+                self._models_to_download = [m for m in models if m in MODELS]
+            else:
+                self._models_to_download = list(MODELS.keys())
+            # Reset per-model status for selected models
+            for mid in MODELS:
+                if mid in self._models_to_download:
+                    self._model_status[mid] = {"status": "pending", "progress": 0.0}
+                else:
+                    self._model_status[mid] = {"status": "completed" if self.gigaam.is_cached(mid) else "pending", "progress": 0.0}
         threading.Thread(target=self._run, name="qaztriber-model-preload", daemon=True).start()
         return self.snapshot()
 
@@ -153,21 +177,32 @@ class ModelPreloadManager:
     def _run(self) -> None:
         try:
             self._cancelled.clear()
-            definitions = list(MODELS.values())
+            models_to_download = getattr(self, "_models_to_download", list(MODELS.keys()))
+            definitions = [MODELS[mid] for mid in models_to_download if mid in MODELS]
             for index, definition in enumerate(definitions):
                 if self._cancelled.is_set():
                     break
 
                 base = index / len(definitions)
 
-                def report(stage: str, fraction: float, base: float = base) -> None:
+                # Mark this model as downloading
+                with self._lock:
+                    self._model_status[definition.id] = {"status": "downloading", "progress": 0.0}
+
+                def report(stage: str, fraction: float, base: float = base, did: str = definition.id) -> None:
                     with self._lock:
                         if self._cancelled.is_set():
                             return
                         self.stage = stage
                         self.progress = min(0.98, base + fraction / len(definitions))
+                        self._model_status[did] = {"status": "downloading", "progress": fraction}
 
                 self.gigaam.ensure_download(definition.id, report, self._cancelled.is_set)
+
+                # Mark this model as completed
+                with self._lock:
+                    if not self._cancelled.is_set():
+                        self._model_status[definition.id] = {"status": "completed", "progress": 1.0}
                 self._persist_status()
 
                 if self._cancelled.is_set():
@@ -181,7 +216,8 @@ class ModelPreloadManager:
                 else:
                     self.status = "completed"
                     self.progress = 1.0
-                    self.stage = "220M и 600M скачаны: приложение готово к офлайн-работе."
+                    downloaded_names = ", ".join(d.parameters for d in definitions)
+                    self.stage = f"Скачаны: {downloaded_names}. Приложение готово к работе."
                 self._persist_status()
         except Exception as error:
             with self._lock:

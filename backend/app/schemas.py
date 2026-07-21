@@ -65,12 +65,19 @@ class ResultResponse(BaseModel):
     duration_seconds: float | None = None
 
 
+class ModelDownloadStatus(BaseModel):
+    model_id: Literal["220m", "600m"]
+    status: Literal["pending", "downloading", "completed", "failed"]
+    progress: float = Field(ge=0, le=1, default=0.0)
+
+
 class PreloadResponse(BaseModel):
     status: PreloadStatus
     progress: float = Field(ge=0, le=1)
     stage: str
     error: str | None = None
     error_code: str | None = None
+    models: list[ModelDownloadStatus] = Field(default_factory=list)
 
 
 class SessionResponse(BaseModel):

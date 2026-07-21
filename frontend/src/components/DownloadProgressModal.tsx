@@ -3,6 +3,7 @@ import { useApp } from "../store";
 import { cancelPreload } from "../api";
 import { Icon } from "../icons";
 import { ProgressBar } from "./ProgressBar";
+import type { ModelDownloadStatus } from "../api";
 
 interface DownloadProgressModalProps {
   onClose: () => void;
@@ -23,13 +24,11 @@ function parseBytes(stage: string): ByteProgress | null {
   let total = parseFloat(match[3]);
   const downloadedUnit = match[2].toUpperCase();
   const totalUnit = match[4].toUpperCase();
-  // Normalize to same unit
   if (downloadedUnit.startsWith("Г") && totalUnit.startsWith("М")) {
     downloaded *= 1024;
   } else if (downloadedUnit.startsWith("М") && totalUnit.startsWith("Г")) {
     total *= 1024;
   }
-  // Use the larger unit
   const unit = totalUnit.startsWith("Г") || downloadedUnit.startsWith("Г") ? "ГБ" : "МБ";
   return { downloaded, total, unit };
 }
@@ -63,26 +62,19 @@ export function DownloadProgressModal({ onClose }: DownloadProgressModalProps) {
       setEtaMinutes(null);
       return;
     }
-
     if (preload.progress >= 1) {
       setEtaMinutes(null);
       return;
     }
-
     const now = Date.now();
     const elapsedSec = (now - startTimeRef.current) / 1000;
-    if (elapsedSec < 2) return; // Wait for meaningful sample
-
+    if (elapsedSec < 2) return;
     const progressDelta = preload.progress - prevProgressRef.current;
     if (progressDelta <= 0) return;
-
     const ratePerSec = progressDelta / elapsedSec;
     if (ratePerSec <= 0) return;
-
     const remaining = (1 - preload.progress) / ratePerSec;
     setEtaMinutes(Math.max(1, Math.round(remaining / 60)));
-
-    // Reset tracking for next interval
     startTimeRef.current = now;
     prevProgressRef.current = preload.progress;
   }, [preload?.progress]);
@@ -111,22 +103,33 @@ export function DownloadProgressModal({ onClose }: DownloadProgressModalProps) {
   }, [cancelRequested, refreshPreload, setError]);
 
   const handleClose = useCallback(() => {
-    // Close modal but download continues in background
     onClose();
   }, [onClose]);
 
   const stageBytes = preload ? parseBytes(preload.stage) : null;
-  const modelHint = preload ? parseModelId(preload.stage) : null;
-  const progress = preload?.progress ?? 0;
+  const activeModelId = preload ? parseModelId(preload.stage) : null;
   const isDownloading = preload?.status === "downloading";
-  const isPaused = preload?.status === "paused";
   const isCompleted = preload?.status === "completed";
   const isFailed = preload?.status === "failed";
   const isCancelled = preload?.status === "cancelled";
   const isTerminal = isCompleted || isFailed || isCancelled;
 
-  const statusIcon = isCompleted ? "check_circle" : isFailed ? "error" : isCancelled ? "cancel" : isPaused ? "pause" : "cloud_download";
-  const statusLabel = isCompleted ? t("download.completed") : isFailed ? t("download.failed") : isCancelled ? t("download.cancelled") : isPaused ? t("download.paused") : "";
+  const statusIcon = isCompleted ? "check_circle" : isFailed ? "error" : isCancelled ? "cancel" : "autorenew";
+  const statusLabel = isCompleted ? t("download.completed") : isFailed ? t("download.failed") : isCancelled ? t("download.cancelled") : "";
+
+  // Per-model status from preload.models, fallback to derived status
+  const modelStatuses: ModelDownloadStatus[] = preload?.models ?? [];
+  const getModelStatus = (modelId: string): ModelDownloadStatus => {
+    const found = modelStatuses.find((m) => m.model_id === modelId);
+    if (found) return found;
+    // Fallback: derive from overall preload state
+    const isActive = activeModelId === modelId;
+    return {
+      model_id: modelId as "220m" | "600m",
+      status: isActive ? "downloading" : isCompleted ? "completed" : "pending",
+      progress: isActive ? (preload?.progress ?? 0) : isCompleted ? 1 : 0,
+    };
+  };
 
   return (
     <>
@@ -153,11 +156,22 @@ export function DownloadProgressModal({ onClose }: DownloadProgressModalProps) {
           </button>
         </div>
 
-        {/* Model cards */}
+        {/* Per-model progress cards */}
         {["220m", "600m"].map((modelId) => {
-          const isActive = !modelHint || modelHint === modelId;
-          const modelProgress = isActive ? progress : 0;
-          // Only the active model shows progress; the other stays at 0
+          const ms = getModelStatus(modelId);
+          const isModelDownloading = ms.status === "downloading";
+          const isModelCompleted = ms.status === "completed";
+          const isModelFailed = ms.status === "failed";
+          const isModelPending = ms.status === "pending";
+          const modelProgress = ms.progress;
+
+          // Status icon per model
+          let modelStatusIcon: string | null = null;
+          let modelStatusColor = "var(--on-surface-variant)";
+          if (isModelCompleted) { modelStatusIcon = "check_circle"; modelStatusColor = "var(--status-done)"; }
+          else if (isModelFailed) { modelStatusIcon = "error"; modelStatusColor = "var(--status-err)"; }
+          else if (isModelDownloading) { modelStatusIcon = "autorenew"; modelStatusColor = "var(--gold-shimmer)"; }
+
           return (
             <div
               key={modelId}
@@ -168,9 +182,10 @@ export function DownloadProgressModal({ onClose }: DownloadProgressModalProps) {
                 padding: "var(--sp-4)",
                 borderRadius: "var(--r-md)",
                 background: "var(--overlay-bg)",
-                border: "1px solid var(--border-soft)",
+                border: "1px solid",
+                borderColor: isModelDownloading ? "var(--gold-shimmer)" : "var(--border-soft)",
                 marginBottom: "var(--sp-3)",
-                opacity: isActive ? 1 : 0.5,
+                opacity: isModelPending ? 0.6 : 1,
               }}
             >
               <div style={{ display: "flex", alignItems: "center", gap: "var(--sp-3)", marginBottom: "var(--sp-1)" }}>
@@ -179,7 +194,7 @@ export function DownloadProgressModal({ onClose }: DownloadProgressModalProps) {
                     fontFamily: "var(--font-mono)",
                     fontSize: 14,
                     fontWeight: 700,
-                    color: isActive ? "var(--gold-shimmer)" : "var(--on-surface-variant)",
+                    color: isModelPending ? "var(--on-surface-variant)" : "var(--gold-shimmer)",
                     flex: "0 0 auto",
                   }}
                 >
@@ -188,32 +203,32 @@ export function DownloadProgressModal({ onClose }: DownloadProgressModalProps) {
                 <span style={{ fontSize: 12, color: "var(--on-surface-variant)", flex: 1 }}>
                   {modelId === "220m" ? "~880 МБ" : "~2.3 ГБ"}
                 </span>
-                {isActive && isDownloading && (
-                  <span style={{ fontSize: 12, fontWeight: 600, color: "var(--gold-shimmer)", fontFamily: "var(--font-mono)" }}>
-                    {Math.round(modelProgress * 100)}%
-                  </span>
-                )}
-                {isActive && isCompleted && (
-                  <Icon name="check_circle" size={18} style={{ color: "var(--status-done)" }} />
-                )}
+
+                {/* Status label */}
+                <span style={{ fontSize: 12, fontWeight: 600, color: modelStatusColor, display: "flex", alignItems: "center", gap: 4 }}>
+                  {modelStatusIcon && (
+                    <Icon
+                      name={modelStatusIcon}
+                      size={14}
+                      style={isModelDownloading ? { animation: "qzt-spin 1s linear infinite" } : undefined}
+                    />
+                  )}
+                  {isModelPending && t("download.statusPending")}
+                  {isModelDownloading && `${Math.round(modelProgress * 100)}%`}
+                  {isModelCompleted && t("download.statusCompleted")}
+                  {isModelFailed && t("download.statusFailed")}
+                </span>
               </div>
 
               {/* Progress bar */}
-              {isActive && (
+              {(isModelDownloading || isModelCompleted) && (
                 <ProgressBar value={modelProgress} />
               )}
 
-              {/* Bytes detail */}
-              {isActive && stageBytes && isDownloading && (
+              {/* Bytes detail for active model */}
+              {isModelDownloading && activeModelId === modelId && stageBytes && (
                 <div style={{ fontSize: 11, color: "var(--on-surface-variant)", fontFamily: "var(--font-mono)" }}>
                   {formatBytes(stageBytes.downloaded, stageBytes.unit)} / {formatBytes(stageBytes.total, stageBytes.unit)}
-                </div>
-              )}
-
-              {/* Completed check mark */}
-              {isActive && isCompleted && (
-                <div style={{ fontSize: 12, color: "var(--status-done)" }}>
-                  {t("download.completed")}
                 </div>
               )}
             </div>

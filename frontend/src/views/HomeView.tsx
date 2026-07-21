@@ -13,7 +13,7 @@ import type { Job, Model } from "../api";
 const terminalStatuses = new Set<Job["status"]>(["completed", "failed", "cancelled"]);
 
 export function HomeView() {
-  const { t, models, preload, prefs, upsertSession, patchSession, navigate, setError, error, refreshPreload, systemInfo } = useApp();
+  const { t, models, preload, prefs, sessions, upsertSession, patchSession, navigate, setError, error, refreshPreload, systemInfo } = useApp();
 
   const [selectedModel, setSelectedModel] = useState<Model["id"]>(prefs.defaultModel);
   const [expectedLanguage, setExpectedLanguage] = useState<Job["expected_language"]>("mixed");
@@ -245,8 +245,54 @@ export function HomeView() {
   }, [duration, systemInfo, selectedModel]);
   const etaText = etaSeconds > 0;
 
+  // Active sessions from store (excluding the current job shown in HomeView)
+  const activeSessions = sessions.filter(
+    (s) => ["queued", "preparing", "loading_model", "transcribing", "paused"].includes(s.status) && s.id !== job?.id
+  );
+
   return (
     <div className="content home">
+      {/* Active sessions bar */}
+      {activeSessions.length > 0 && (
+        <div style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)", marginBottom: "var(--sp-4)" }}>
+          {activeSessions.map((s) => (
+            <div
+              key={s.id}
+              onClick={() => navigate("session", s.id)}
+              style={{
+                display: "flex",
+                alignItems: "center",
+                gap: "var(--sp-3)",
+                padding: "var(--sp-3) var(--sp-4)",
+                borderRadius: "var(--r-md)",
+                background: "var(--overlay-bg)",
+                border: "1px solid var(--border-soft)",
+                cursor: "pointer",
+                transition: "border-color 0.15s",
+              }}
+              onMouseEnter={(e) => { e.currentTarget.style.borderColor = "var(--gold-shimmer)"; }}
+              onMouseLeave={(e) => { e.currentTarget.style.borderColor = "var(--border-soft)"; }}
+            >
+              <Icon name="autorenew" size={18} style={{ animation: "qzt-spin 1.5s linear infinite", color: "var(--gold-shimmer)" }} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ fontSize: 13, fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                  {s.originalFilename || s.id.slice(-8)}
+                </div>
+                <div style={{ fontSize: 11, color: "var(--on-surface-variant)" }}>
+                  {s.modelUsed.toUpperCase()} · {s.status === "paused" ? t("status.paused") : t("home.processing")}
+                </div>
+              </div>
+              <div style={{ width: 80 }}>
+                <ProgressBar value={s.progress || 0} />
+              </div>
+              <span style={{ fontSize: 12, fontFamily: "var(--font-mono)", color: "var(--gold-shimmer)", minWidth: 36, textAlign: "right" }}>
+                {Math.round((s.progress || 0) * 100)}%
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+
       {/* Compact hero: record + language + transcribe */}
       <section className="card home-hero-compact gold-edge">
         {/* ЗОНА A: заголовок + кнопка записи */}

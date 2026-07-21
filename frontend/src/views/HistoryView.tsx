@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { cancelJob, createJob, deleteJob } from "../api";
+import { cancelJob, createJob, deleteJob, pauseJob, resumeJob } from "../api";
 import { useApp } from "../store";
 import { Icon } from "../icons";
 import { Modal } from "../components/Modal";
@@ -68,6 +68,7 @@ export function HistoryView() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [renameTarget, setRenameTarget] = useState<{ id: string; value: string } | null>(null);
   const [retryingId, setRetryingId] = useState<string | null>(null);
+  const [retryConfirm, setRetryConfirm] = useState<{ id: string; model: string; language: string; filename: string | null } | null>(null);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -85,6 +86,24 @@ export function HistoryView() {
   function selectAll() { setSelected(new Set(filtered.map((s) => s.id))); }
   function clearSelect() { setSelected(new Set()); }
   function exitSelect() { setSelectMode(false); clearSelect(); }
+
+  async function handlePause(id: string) {
+    try {
+      const updated = await pauseJob(id);
+      patchSession(id, { status: updated.status });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("error.cancel"));
+    }
+  }
+
+  async function handleResume(id: string) {
+    try {
+      const updated = await resumeJob(id);
+      patchSession(id, { status: updated.status });
+    } catch (reason) {
+      setError(reason instanceof Error ? reason.message : t("error.cancel"));
+    }
+  }
 
   async function handleRetry(id: string, model: string, language: string, filename: string | null) {
     if (retryingId) return;
@@ -202,6 +221,16 @@ export function HistoryView() {
                 </div>
                 {!selectMode && (
                   <div className="row-actions">
+                    {s.status === "transcribing" && (
+                      <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={(e) => { e.stopPropagation(); handlePause(s.id); }} title={t("home.pause")}>
+                        <Icon name="pause" size={16} />
+                      </button>
+                    )}
+                    {s.status === "paused" && (
+                      <button className="icon-btn" style={{ width: 32, height: 32 }} onClick={(e) => { e.stopPropagation(); handleResume(s.id); }} title={t("home.resume")}>
+                        <Icon name="play_arrow" size={16} />
+                      </button>
+                    )}
                     {["queued", "preparing", "loading_model", "transcribing"].includes(s.status) && (
                       <button className="icon-btn danger" style={{ width: 32, height: 32 }} onClick={(e) => { e.stopPropagation(); handleStop(s.id); }} title={t("history.stop")}>
                         <Icon name="stop" size={16} />
@@ -212,7 +241,7 @@ export function HistoryView() {
                         className="icon-btn"
                         style={{ width: 32, height: 32, opacity: retryingId === s.id ? 0.5 : 1 }}
                         disabled={retryingId === s.id}
-                        onClick={(e) => { e.stopPropagation(); handleRetry(s.id, s.modelUsed, s.expectedLanguage, s.originalFilename); }}
+                        onClick={(e) => { e.stopPropagation(); setRetryConfirm({ id: s.id, model: s.modelUsed, language: s.expectedLanguage, filename: s.originalFilename }); }}
                         title={t("history.retry")}
                       >
                         <Icon name="refresh" size={16} />
@@ -237,6 +266,26 @@ export function HistoryView() {
       {renameTarget && (
         <Modal title={t("session.rename")} confirmLabel={t("common.save")} onClose={() => setRenameTarget(null)} onConfirm={saveRename}>
           <input className="input" autoFocus value={renameTarget.value} onChange={(e) => setRenameTarget({ ...renameTarget, value: e.target.value })} onKeyDown={(e) => { if (e.key === "Enter") saveRename(); }} placeholder={t("session.name")} />
+        </Modal>
+      )}
+
+      {retryConfirm && (
+        <Modal
+          title={t("history.retryConfirm")}
+          confirmLabel={t("history.retry")}
+          onClose={() => setRetryConfirm(null)}
+          onConfirm={() => {
+            const rc = retryConfirm;
+            setRetryConfirm(null);
+            if (rc) handleRetry(rc.id, rc.model, rc.language, rc.filename);
+          }}
+        >
+          <p>{t("history.retryConfirmText")}</p>
+          <div style={{ marginTop: "var(--sp-3)", padding: "var(--sp-3)", background: "var(--overlay-bg)", borderRadius: "var(--r-sm)", fontSize: 13 }}>
+            <div><strong>{t("session.model")}:</strong> {retryConfirm.model.toUpperCase()}</div>
+            <div><strong>{t("home.language")}:</strong> {t(`lang.${retryConfirm.language}`)}</div>
+            {retryConfirm.filename && <div><strong>{t("session.source")}:</strong> {retryConfirm.filename}</div>}
+          </div>
         </Modal>
       )}
     </div>

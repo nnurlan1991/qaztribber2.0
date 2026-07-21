@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useApp } from "../store";
 import { LANGS } from "../i18n";
 import { Icon } from "../icons";
@@ -14,6 +14,19 @@ export function SettingsView() {
   const [logLevel, setLogLevel] = useState<string>("INFO");
   const [autoRefresh, setAutoRefresh] = useState(false);
   const [loadingLogs, setLoadingLogs] = useState(false);
+  const [showDebug, setShowDebug] = useState(false);
+  const versionClicksRef = useRef(0);
+  const versionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  function handleVersionClick() {
+    versionClicksRef.current += 1;
+    if (versionTimerRef.current) clearTimeout(versionTimerRef.current);
+    versionTimerRef.current = setTimeout(() => { versionClicksRef.current = 0; }, 1500);
+    if (versionClicksRef.current >= 5) {
+      versionClicksRef.current = 0;
+      setShowDebug((prev) => !prev);
+    }
+  }
 
   async function fetchLogs() {
     setLoadingLogs(true);
@@ -92,7 +105,7 @@ export function SettingsView() {
         </div>
         <p className="muted" style={{ fontSize: 13, lineHeight: 1.6 }}>{t("settings.aboutDesc")}</p>
         <div className="divider" />
-        <div className="meta-row"><span className="meta-key">{t("settings.version")}</span><span className="meta-val mono">{APP_VERSION}</span></div>
+        <div className="meta-row"><span className="meta-key">{t("settings.version")}</span><span className="meta-val mono" style={{ cursor: "pointer", userSelect: "none" }} onClick={handleVersionClick}>{APP_VERSION}</span></div>
         <div className="meta-row"><span className="meta-key">{t("settings.locale")}</span><span className="meta-val mono">{lang === "kz" ? "kk-KZ" : "ru-RU"}</span></div>
         <div className="meta-row"><span className="meta-key">{t("settings.engine")}</span><span className="meta-val mono" style={{ fontSize: 12 }}>GigaAM · ONNX Runtime · CPU</span></div>
       </section>
@@ -107,7 +120,8 @@ export function SettingsView() {
         </a>
       </section>
 
-      {/* Debug Panel */}
+      {/* Debug Panel (hidden — click version 5x to toggle) */}
+      {showDebug && (
       <section className="card pad mb-6">
         <div className="row-flex between mb-4">
           <h2 className="h3">{t("settings.debug")}</h2>
@@ -141,6 +155,7 @@ export function SettingsView() {
           )}
         </div>
       </section>
+      )}
     </div>
   );
 }
