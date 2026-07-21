@@ -13,7 +13,7 @@ import type { Job, Model } from "../api";
 const terminalStatuses = new Set<Job["status"]>(["completed", "failed", "cancelled"]);
 
 export function HomeView() {
-  const { t, models, preload, prefs, sessions, upsertSession, patchSession, navigate, setError, error, systemInfo } = useApp();
+  const { t, models, preload, prefs, sessions, upsertSession, patchSession, navigate, setError, error, systemInfo, pendingRerun, setPendingRerun } = useApp();
 
   const [selectedModel, setSelectedModel] = useState<Model["id"]>(prefs.defaultModel);
   const [expectedLanguage, setExpectedLanguage] = useState<Job["expected_language"]>("mixed");
@@ -77,6 +77,26 @@ export function HomeView() {
   }, [job?.status, job?.id, patchSession, setError, t]);
 
   useEffect(() => () => { if (audioUrl) URL.revokeObjectURL(audioUrl); }, [audioUrl]);
+
+  // Handle pending rerun (from SessionView "Заново" button)
+  useEffect(() => {
+    if (!pendingRerun) return;
+    // Apply the pending file + settings
+    const { file: rerunFile, model, expectedLanguage: lang, sourceType: stype, originalFilename } = pendingRerun;
+    if (audioUrl) URL.revokeObjectURL(audioUrl);
+    setFile(rerunFile);
+    setAudioUrl(URL.createObjectURL(rerunFile));
+    setDuration(0);
+    setJob(null);
+    setResult(null);
+    setError(null);
+    cancelRequestedRef.current = false;
+    setSourceType(stype);
+    setSelectedModel(model as Model["id"]);
+    setExpectedLanguage(lang as Job["expected_language"]);
+    // Clear the pending state so it doesn't re-trigger
+    setPendingRerun(null);
+  }, [pendingRerun, audioUrl, setPendingRerun, setError]);
 
   useEffect(() => {
     if (!recording) {

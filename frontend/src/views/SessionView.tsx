@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { deleteJob, getResult, getJob, pauseJob, resumeJob, cancelJob, openUrl, saveAndOpenTxt } from "../api";
+import { deleteJob, getResult, getJob, pauseJob, resumeJob, cancelJob, openUrl, saveAndOpenTxt, openFolder, getSessionFiles } from "../api";
 import { useApp } from "../store";
 import { Icon } from "../icons";
 import { Modal } from "../components/Modal";
@@ -10,13 +10,16 @@ import { formatDate, formatTime, sourceIcon } from "../storage";
 import { notifyJobComplete } from "../notifications";
 
 export function SessionView() {
-  const { t, lang, currentSessionId, sessions, patchSession, removeSessions, navigate } = useApp();
+  const { t, lang, currentSessionId, sessions, patchSession, removeSessions, navigate, setPendingRerun, setError } = useApp();
   const session = sessions.find((s) => s.id === currentSessionId) ?? null;
   const [editing, setEditing] = useState(false);
   const [nameDraft, setNameDraft] = useState("");
   const [text, setText] = useState<string | null>(null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [showAudioPlayer, setShowAudioPlayer] = useState(false);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [sessionDir, setSessionDir] = useState<string | null>(null);
 
   // Load transcript: prefer local, else fetch from API
   if (session && text === null && session.transcript) {
@@ -147,6 +150,82 @@ export function SessionView() {
     await saveAndOpenTxt(text, baseName);
   }
 
+  async function handleListenAudio() {
+    if (!session) return;
+    if (showAudioPlayer) {
+      // Toggle off
+      setShowAudioPlayer(false);
+      if (audioUrl) {
+        URL.revokeObjectURL(audioUrl);
+        setAudioUrl(null);
+      }
+      return;
+    }
+    try {
+      const response = await fetch(`/api/transcriptions/${session.id}/source`);
+      if (!response.ok) {
+        setError(t("session.audioMissing"));
+        return;
+      }
+      const blob = await response.blob();
+      const url = URL.createObjectURL(blob);
+      setAudioUrl(url);
+      setShowAudioPlayer(true);
+    } catch {
+      setError(t("session.audioMissing"));
+    }
+  }
+
+  async function handleRerun() {
+    if (!session) return;
+    try {
+      // Fetch the source audio file
+      const response = await fetch(`/api/transcriptions/${session.id}/source`);
+      if (!response.ok) {
+        setError(t("session.audioMissing"));
+        return;
+      }
+      const blob = await response.blob();
+      const filename = session.originalFilename || `${session.id.slice(-8)}.audio`;
+      const file = new File([blob], filename, { type: blob.type || "audio/wav" });
+      // Pass to HomeView via store
+      setPendingRerun({
+        file,
+        model: session.modelUsed,
+        expectedLanguage: session.expectedLanguage,
+        sourceType: session.sourceType,
+        originalFilename: filename,
+      });
+      navigate("home");
+    } catch {
+      setError(t("session.audioMissing"));
+    }
+  }
+
+  async function handleOpenFolder() {
+    if (!session) return;
+    // Fetch directory path from API (works even after backend restart)
+    try {
+      const info = await getSessionFiles(session.id);
+      if (info.directory) {
+        setSessionDir(info.directory);
+        const opened = await openFolder(info.directory);
+        if (!opened) {
+          setError(t("session.openFolder"));
+        }
+      }
+    } catch {
+      setError(t("session.openFolder"));
+    }
+  }
+
+  // Cleanup audio URL on unmount
+  useEffect(() => {
+    return () => {
+      if (audioUrl) URL.revokeObjectURL(audioUrl);
+    };
+  }, [audioUrl]);
+
   function saveRename() {
     if (session) patchSession(session.id, { displayName: nameDraft.trim() || null });
     setEditing(false);
@@ -227,6 +306,56 @@ export function SessionView() {
           </div>
         )}
       </section>
+
+      {/* Quick actions for completed sessions: rerun, listen, open folder */}
+      {!isActive && (
+        <section className="card pad mb-6">
+          <div className="row-flex between mb-4">
+            <h2 className="h3">{t("session.sessionFiles")}</h2>
+          </div>
+          <div className="row-flex gap-2" style={{ flexWrap: "wrap" }}>
+            <button className="btn btn-soft sm" onClick={handleRerun} title={t("session.rerunHint")}>
+              <Icon name="refresh" size={16} />
+              {t("session.rerun")}
+            </button>
+            <button
+              className={`btn sm ${showAudioPlayer ? "btn-gold" : "btn-soft"}`}
+              onClick={handleListenAudio}
+              title={t("session.listenHint")}
+            >
+              <Icon name={showAudioPlayer ? "pause" : "play_arrow"} size={16} />
+              {t("session.listen")}
+            </button>
+            <button className="btn btn-ghost sm" onClick={handleOpenFolder} title={sessionDir ?? t("session.openFolder")}>
+              <Icon name="folder_open" size={16} />
+              {t("session.openFolder")}
+            </button>
+          </div>
+
+          {/* Inline audio player */}
+          {showAudioPlayer && audioUrl && (
+            <div className="mt-4" style={{ display: "flex", flexDirection: "column", gap: "var(--sp-2)" }}>
+              <audio
+                controls
+                src={audioUrl}
+                style={{ width: "100%", height: 38 }}
+                autoPlay
+              />
+              <div className="faint" style={{ fontSize: 11, display: "flex", alignItems: "center", gap: 6 }}>
+                <Icon name="graphic_eq" size={14} />
+                <span>{t("session.audio")} · {session.originalFilename || session.id.slice(-8)}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Show session directory path (collapsible) */}
+          {sessionDir && (
+            <div className="mt-3" style={{ fontSize: 11, color: "var(--on-surface-variant)", fontFamily: "var(--font-mono)", wordBreak: "break-all", padding: "var(--sp-2) var(--sp-3)", background: "var(--overlay-bg)", borderRadius: "var(--r-sm)", border: "1px solid var(--border-soft)" }}>
+              {sessionDir}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* Transcript */}
       <section className="card pad mb-6">

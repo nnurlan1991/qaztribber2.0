@@ -13,6 +13,15 @@ import {
 
 export type View = "home" | "history" | "session" | "models" | "settings";
 
+/** A pending source file + metadata for rerun from an existing session. */
+export interface PendingRerun {
+  file: File;
+  model: string;
+  expectedLanguage: string;
+  sourceType: "file" | "mic" | "dictaphone";
+  originalFilename: string;
+}
+
 interface AppCtx {
   // i18n
   lang: Lang;
@@ -28,6 +37,10 @@ interface AppCtx {
   view: View;
   currentSessionId: string | null;
   navigate: (view: View, sessionId?: string | null) => void;
+
+  // pending rerun (used to pass audio file from SessionView → HomeView)
+  pendingRerun: PendingRerun | null;
+  setPendingRerun: (r: PendingRerun | null) => void;
 
   // api state
   models: Model[];
@@ -64,6 +77,7 @@ export function AppProvider({ children }: { children: ReactNode }) {
 
   const [view, setView] = useState<View>("home");
   const [currentSessionId, setCurrentSessionId] = useState<string | null>(null);
+  const [pendingRerun, setPendingRerun] = useState<PendingRerun | null>(null);
 
   const [models, setModels] = useState<Model[]>([]);
   const [preload, setPreload] = useState<Preload | null>(null);
@@ -158,10 +172,11 @@ export function AppProvider({ children }: { children: ReactNode }) {
     lang, setLang, t,
     prefs, setPrefs, theme,
     view, currentSessionId, navigate,
+    pendingRerun, setPendingRerun,
     models, preload, systemInfo, refreshModels, refreshPreload,
     sessions, refreshSessions, upsertSession, patchSession, removeSessions,
     error, setError,
-  }), [lang, setLang, t, prefs, setPrefs, theme, view, currentSessionId, navigate, models, preload, systemInfo, refreshModels, refreshPreload, sessions, refreshSessions, upsertSession, patchSession, removeSessions, error]);
+  }), [lang, setLang, t, prefs, setPrefs, theme, view, currentSessionId, navigate, pendingRerun, models, preload, systemInfo, refreshModels, refreshPreload, sessions, refreshSessions, upsertSession, patchSession, removeSessions, error]);
 
   return <Ctx.Provider value={value}>{children}</Ctx.Provider>;
 }

@@ -1,5 +1,3 @@
-import { invoke } from "@tauri-apps/api/core";
-
 export type ModelsStoragePath = { path: string; exists: boolean };
 
 export type LogEntry = {
@@ -71,6 +69,12 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const getModels = () => request<Model[]>("/api/models");
 export const getModelsStoragePath = () => request<ModelsStoragePath>("/api/models/storage-path");
+
+export type SessionFileInfo = { name: string; size: number; kind: string };
+export type SessionFiles = { directory: string; files: SessionFileInfo[] };
+
+/** Fetch directory path and file listing for a session on disk. */
+export const getSessionFiles = (jobId: string) => request<SessionFiles>(`/api/sessions/${jobId}/files`);
 export const deleteModel = (modelId: Model["id"]) => request<void>(`/api/models/${modelId}`, { method: "DELETE" });
 export const getResult = (jobId: string) => request<Result>(`/api/transcriptions/${jobId}/result`);
 export const cancelJob = (jobId: string) => request<Job>(`/api/transcriptions/${jobId}/cancel`, { method: "POST" });
@@ -90,24 +94,53 @@ export const startPreload = (models?: string[]) => request<Preload>("/api/models
  */
 export async function openFolder(path: string): Promise<boolean> {
   try {
-    return await invoke<boolean>("open_folder", { path });
+    const tauriInternals = (window as unknown as { __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } }).__TAURI_INTERNALS__;
+    if (tauriInternals && typeof tauriInternals.invoke === "function") {
+      return (await tauriInternals.invoke("open_folder", { path })) as boolean;
+    }
   } catch {
-    // Not in Tauri context (dev browser) or invoke failed
-    return false;
+    // IPC failed
   }
+  return false;
 }
 
 /**
  * Opens a URL in the default system browser. WKWebView blocks window.open()
  * for external URLs, so we shell out to the OS browser handler.
- * Returns true if opened, false if not in Tauri context.
+ * Returns true if opened, false if all methods failed.
  */
 export async function openUrl(url: string): Promise<boolean> {
+  // Method 1: Tauri custom command (works when IPC is available)
   try {
-    return await invoke<boolean>("open_url", { url });
+    const tauriInternals = (window as unknown as { __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } }).__TAURI_INTERNALS__;
+    if (tauriInternals && typeof tauriInternals.invoke === "function") {
+      const result = await tauriInternals.invoke("open_url", { url });
+      if (result === true) return true;
+    }
   } catch {
-    // Fallback: try window.open (may work in dev browser)
+    // IPC failed — try fallback
+  }
+
+  // Method 2: <a target="_blank"> click — tauri-plugin-opener auto-intercepts
+  // these clicks and opens them in the default browser
+  try {
+    const a = document.createElement("a");
+    a.href = url;
+    a.target = "_blank";
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    return true;
+  } catch {
+    // Fallback failed too
+  }
+
+  // Method 3: window.open (may work in dev browser, blocked in WKWebView)
+  try {
     window.open(url, "_blank");
+    return true;
+  } catch {
     return false;
   }
 }
@@ -118,25 +151,33 @@ export async function openUrl(url: string): Promise<boolean> {
  * Returns the saved file path, or null if not in Tauri context.
  */
 export async function saveAndOpenTxt(content: string, filename: string): Promise<string | null> {
+  // Method 1: Tauri custom command
   try {
-    return await invoke<string>("save_and_open_txt", { content, filename });
-  } catch {
-    // Fallback: not in Tauri context — try browser download
-    try {
-      const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = filename.endsWith(".txt") ? filename : `${filename}.txt`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
-      URL.revokeObjectURL(url);
-    } catch {
-      // Last resort: ignore
+    const tauriInternals = (window as unknown as { __TAURI_INTERNALS__?: { invoke: (cmd: string, args?: Record<string, unknown>) => Promise<unknown> } }).__TAURI_INTERNALS__;
+    if (tauriInternals && typeof tauriInternals.invoke === "function") {
+      const result = await tauriInternals.invoke("save_and_open_txt", { content, filename }) as string;
+      if (result) return result;
     }
-    return null;
+  } catch {
+    // IPC failed — try fallback
   }
+
+  // Method 2: Browser download (opens in browser, not in default editor)
+  try {
+    const blob = new Blob([content], { type: "text/plain;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename.endsWith(".txt") ? filename : `${filename}.txt`;
+    a.style.display = "none";
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  } catch {
+    // Last resort: ignore
+  }
+  return null;
 }
 export const getSystemInfo = () => request<SystemInfo>("/api/system");
 export const isFirstLaunch = () => request<{ first_launch: boolean }>("/api/first-launch");

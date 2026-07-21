@@ -397,6 +397,47 @@ async def get_source_audio(job_id: str, request: Request):
     )
 
 
+@router.get("/sessions/{job_id}/files")
+def session_files(job_id: str) -> dict:
+    """Return the directory path and file listing for a session on disk.
+
+    Works for both in-memory and on-disk-only (post-restart) sessions.
+    Used by the UI to show 'Open folder' button and list session files.
+    """
+    job_dir = settings.jobs_dir / job_id
+    if not job_dir.is_dir():
+        raise HTTPException(status_code=404, detail="Сессия не найдена.")
+
+    files: list[dict] = []
+    for entry in sorted(job_dir.iterdir()):
+        if not entry.is_file():
+            continue
+        try:
+            size = entry.stat().st_size
+        except OSError:
+            size = 0
+        # Categorize file
+        name = entry.name
+        if name == "source":
+            kind = "audio"
+        elif name == "transcription.txt":
+            kind = "transcript"
+        elif name == "metadata.json":
+            kind = "metadata"
+        elif name.endswith(".wav"):
+            kind = "audio"
+        elif name.endswith(".txt"):
+            kind = "text"
+        else:
+            kind = "other"
+        files.append({"name": name, "size": size, "kind": kind})
+
+    return {
+        "directory": str(job_dir),
+        "files": files,
+    }
+
+
 @router.get("/transcriptions/{job_id}/result.txt")
 def transcription_txt(request: Request, job_id: str) -> FileResponse:
     job = get_job(request, job_id)
