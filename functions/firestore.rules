@@ -1,0 +1,28 @@
+rules_version = '2';
+
+// QazTriber Firestore Rules
+//
+// Принцип: пользователи могут ТОЛЬКО ЧИТАТЬ свой собственный документ.
+// Запись — исключительно через Cloud Functions (onUserCreate) и Firebase
+// Admin SDK (VPS admin panel). Это исключает fake-approve через клиент.
+//
+// users/{uid}:
+//   - read:   только владелец (request.auth.uid == uid)
+//   - write:  никто из клиентов; Admin SDK и Cloud Functions bypass rules
+//
+// Коллекция отсутствия других документов — default deny.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{uid} {
+      allow read: if request.auth != null && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+    // Default deny для всего остального
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

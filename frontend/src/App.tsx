@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { AppProvider, useApp } from "./store";
+import { AuthProvider, useAuth } from "./lib/auth";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { DownloadStatusBar } from "./components/DownloadStatusBar";
@@ -10,6 +11,8 @@ import { HistoryView } from "./views/HistoryView";
 import { SessionView } from "./views/SessionView";
 import { ModelsView } from "./views/ModelsView";
 import { SettingsView } from "./views/SettingsView";
+import { AuthView } from "./views/AuthView";
+import { PendingApprovalView } from "./views/PendingApprovalView";
 import { OnboardingModal } from "./components/OnboardingModal";
 import { DownloadProgressModal } from "./components/DownloadProgressModal";
 import { isFirstLaunch, markInitialized, startPreload } from "./api";
@@ -50,6 +53,7 @@ function Shell() {
   const [showOnboarding, setShowOnboarding] = useState(false);
   const [showDownloadModal, setShowDownloadModal] = useState(false);
   const { setError, preload, t } = useApp();
+  const { state: authState } = useAuth();
 
   useEffect(() => {
     isFirstLaunch()
@@ -100,6 +104,19 @@ function Shell() {
 
   return (
     <div className="app">
+      {/* Auth gate: block UI until approved */}
+      {authState === "loading" && (
+        <div className="auth-screen">
+          <div className="auth-card" style={{ textAlign: "center" }}>
+            <div className="spinner" style={{ width: 32, height: 32, margin: "0 auto 16px" }} />
+            <p className="muted">Загрузка…</p>
+          </div>
+        </div>
+      )}
+      {authState === "unauthenticated" && <AuthView />}
+      {authState === "pending" && <PendingApprovalView />}
+      {authState === "approved" && (
+        <>
       {/* Sidecar status banner */}
       {sidecarStatus && sidecarStatus !== "connected" && (
         <div
@@ -158,6 +175,8 @@ function Shell() {
       {showDownloadModal && preload && (preload.status === "downloading" || preload.status === "paused" || preload.status === "completed" || preload.status === "failed" || preload.status === "cancelled") && (
         <DownloadProgressModal onClose={() => setShowDownloadModal(false)} />
       )}
+        </>
+      )}
     </div>
   );
 }
@@ -165,7 +184,9 @@ function Shell() {
 export default function App() {
   return (
     <AppProvider>
-      <Shell />
+      <AuthProvider>
+        <Shell />
+      </AuthProvider>
     </AppProvider>
   );
 }

@@ -122,8 +122,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const refreshModels = useCallback(async () => {
-    try { setModels(await getModels()); } catch (reason) { setError(`${translate(lang, "error.api")}: ${(reason as Error).message}`); }
-  }, [lang]);
+    try { setModels(await getModels()); } catch { /* sidecar may not be ready yet — silent */ }
+  }, []);
 
   const refreshPreload = useCallback(async () => {
     try { setPreload(await getPreload()); } catch { /* silent */ }

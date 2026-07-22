@@ -1,0 +1,56 @@
+rules_version = '2';
+
+// QazTriber Firestore Rules — APPROVE-GATE architecture (no Cloud Functions)
+//
+// Принцип: клиент (desktop app) сам создаёт свой pending-документ при регистрации,
+// но Firestore rules ПРИНУЖДАЮТ approved=false при создании. Клиент физически
+// не может записать approved=true — это исключает fake-approve.
+//
+// После создания: update/delete запрещены для клиента. Только Firebase Admin SDK
+// (VPS admin panel) может менять approved, approvedBy, pendingMessageId и т.д.
+// Admin SDK bypass rules полностью (server-side).
+//
+// Это работает на Spark (free) плане — Cloud Functions не нужны.
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    match /users/{uid} {
+
+      // Чтение: только владелец документа. Нужно, чтобы клиент мог слушать
+      // onSnapshot своего статуса approved (pending → approved transition).
+      allow read: if request.auth != null && request.auth.uid == uid;
+
+      // Создание: только владелец, и ТОЛЬКО с approved=false.
+      // Валидируем структуру и значения — клиент не может подсунуть
+      // произвольные поля (например, isAdmin) или подделать email.
+      allow create: if request.auth != null
+        && request.auth.uid == uid
+        && request.resource.data.approved == false
+        && request.resource.data.email is string
+        && request.resource.data.email == request.auth.token.email
+        && request.resource.data.provider is string
+        && (request.resource.data.provider == "google"
+            || request.resource.data.provider == "email")
+        && request.resource.data.displayName is string
+        && request.resource.data.uid is string
+        && request.resource.data.uid == uid
+        && request.resource.data.createdAt is timestamp
+        // Запрещённые поля — клиент не может их задать:
+        && !('approvedAt' in request.resource.data.keys())
+        && !('approvedBy' in request.resource.data.keys())
+        && !('pendingMessageId' in request.resource.data.keys())
+        && !('revokedAt' in request.resource.data.keys())
+        && !('isAdmin' in request.resource.data.keys());
+
+      // Изменение и удаление: запрещены для клиента.
+      // Только Admin SDK (VPS) меняет approved и сопутствующие поля.
+      allow update, delete: if false;
+    }
+
+    // Default deny для всего остального
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

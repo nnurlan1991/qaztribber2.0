@@ -4,7 +4,7 @@
 
 ## Overview
 
-**QazTriber** — десктопное приложение для офлайн-расшифровки казахской, русской и смешанной речи. Аудио обрабатывается локально на устройстве пользователя (модели GigaAM, PyTorch). Никаких облаков, аккаунтов, телеметрии.
+**QazTriber** — десктопное приложение для офлайн-расшифровки казахской, русской и смешанной речи. Аудио обрабатывается локально на устройстве пользователя (ИИ модель для распознавания, PyTorch). Никаких облаков, аккаунтов, телеметрии.
 
 ## Products
 
@@ -26,7 +26,7 @@
 ### Backend (sidecar)
 - **Python 3.11**, FastAPI, Uvicorn
 - **PyInstaller** (`--onedir`) → `src-tauri/binaries/qaztriber-backend/`
-- **GigaAM** модели (PyTorch): MPS на Apple Silicon, CPU на Windows
+- **ИИ модель для распознавания** (PyTorch): MPS на Apple Silicon, CPU на Windows
 - venv: `backend/.venv/bin/python` (Python 3.11, arm64)
 
 ### Build pipeline
@@ -168,7 +168,7 @@ frontend/src/
 
 backend/app/
   api/transcriptions.py — endpoints (/transcribe, /system, /sessions)
-  services/gigaam.py    — GigaAM wrapper, MODEL_DOWNLOAD_BASE
+  services/gigaam.py    — wrapper для ИИ модели, MODEL_DOWNLOAD_BASE
   schemas.py            — Pydantic schemas (SystemInfoResponse и др.)
 
 packaging/build_release.py — PyInstaller + strip_sidecar()
@@ -182,7 +182,7 @@ landing/index.html            — лендинг
 
 - **Windows CI:** env `PYTHONUTF8=1` обязателен — иначе `UnicodeEncodeError` на кириллице в print()
 - **DMG locally:** `bundle_dmg.sh` падает на macOS, но .app собирается. CI собирает .dmg успешно.
-- **GigaAM:** PyTorch (не ONNX) — MPS на Apple Silicon, CPU на Windows
+- **ИИ модель для распознавания:** PyTorch (не ONNX) — MPS на Apple Silicon, CPU на Windows
 - **.swarm/ и .opencode/** в `.gitignore` — не коммитить
 - **Ключ `id_rsa_aidi`** на этом Mac не работает для сервера — использовать `ai_project1`
 
@@ -192,7 +192,7 @@ landing/index.html            — лендинг
 - Языки распознавания: kazakh, russian, mixed (KZ+RU)
 - Переводы в `frontend/src/i18n.ts`
 
-## Models (GigaAM)
+## Models (ИИ модель для распознавания)
 
 - Использует PyTorch (не ONNX)
 - `device()` в `gigaam.py` определяет `mps` или `cpu`

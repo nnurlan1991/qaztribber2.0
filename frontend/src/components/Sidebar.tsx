@@ -1,4 +1,5 @@
 import { useApp, type View } from "../store";
+import { useAuth } from "../lib/auth";
 import { Icon } from "../icons";
 import { Logo } from "../Logo";
 
@@ -20,6 +21,7 @@ const MGMT_NAV: NavDef[] = [
 
 export function Sidebar() {
   const { view, navigate, t, models, sessions, prefs } = useApp();
+  const { user, signOut } = useAuth();
 
   const cachedCount = models.filter((m) => m.cached).length;
   const totalModels = models.length;
@@ -60,6 +62,22 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-foot">
+        {user && (
+          <div className="account-pill" title={user.email}>
+            <Icon name="account_circle" size={20} />
+            <span className="mono" style={{ fontSize: 11, color: "var(--on-surface-variant)", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>
+              {user.email}
+            </span>
+            <button
+              className="icon-btn"
+              onClick={() => signOut()}
+              title={t("auth.logout")}
+              style={{ width: 24, height: 24, padding: 0 }}
+            >
+              <Icon name="logout" size={14} />
+            </button>
+          </div>
+        )}
         <div className="model-pill" onClick={() => navigate("models")} role="button" tabIndex={0}>
           <span className={`model-dot ${dotClass}`} />
           <span className="mono" style={{ fontSize: 11, color: "var(--on-surface-variant)" }}>

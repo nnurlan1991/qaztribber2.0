@@ -172,8 +172,8 @@ class TestErrorCodeMappingLogic:
         assert self._classify_job_error("Failed to download") == "model_download_failed"
 
     def test_download_russian_keywords(self):
-        assert self._classify_job_error("Не удалось скачать GigaAM 220M: network error") == "model_download_failed"
-        assert self._classify_job_error("Таймаут загрузки GigaAM 220M: timeout") == "model_download_failed"
+        assert self._classify_job_error("Не удалось скачать модель 220M: network error") == "model_download_failed"
+        assert self._classify_job_error("Таймаут загрузки модели 220M: timeout") == "model_download_failed"
 
     def test_url_not_classified_as_download(self):
         """'url' alone does NOT trigger model_download_failed — only Russian + English download keywords."""
@@ -184,9 +184,9 @@ class TestErrorCodeMappingLogic:
         assert self._classify_job_error("Failed to load_model: PyTorch error") == "model_load_failed"
 
     def test_gigaam_without_download_or_load_keywords_is_unknown(self):
-        """'gigaam error' without download or load_model keywords → unknown_error."""
-        assert self._classify_job_error("gigaam error") == "unknown_error"
-        assert self._classify_job_error("GigaAM initialization failed") == "unknown_error"
+        """'model error' without download or load_model keywords → unknown_error."""
+        assert self._classify_job_error("model error") == "unknown_error"
+        assert self._classify_job_error("Model initialization failed") == "unknown_error"
 
     def test_unknown_error(self):
         assert self._classify_job_error("Something unexpected") == "unknown_error"

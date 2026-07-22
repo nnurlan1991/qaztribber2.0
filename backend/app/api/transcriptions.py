@@ -123,7 +123,7 @@ def system_info(request: Request) -> SystemInfoResponse:
         pass
 
     # Оценка скорости: множитель относительно реального времени
-    # На основе empirics: GigaAM 220M на MPS ~0.35x, на CPU ~1.2x
+    # На основе empirics: модель 220M на MPS ~0.35x, на CPU ~1.2x
     # 600M примерно в 2x медленнее 220M
     if device == "mps":
         speed_220m = 0.35
@@ -282,7 +282,7 @@ async def create_transcription(
     end_seconds: float | None = Form(None),
 ) -> JobResponse:
     if model not in MODELS:
-        raise HTTPException(status_code=422, detail="Выберите GigaAM 220M или 600M.")
+        raise HTTPException(status_code=422, detail="Выберите модель 220M или 600M.")
     if expected_language not in {"kazakh", "russian", "mixed"}:
         raise HTTPException(status_code=422, detail="Допустимы языки: казахский, русский или смешанный.")
     filename = file.filename or "recording.webm"

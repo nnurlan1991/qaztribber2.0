@@ -13,7 +13,8 @@ export type IconName =
   | "radio_button_unchecked" | "segment" | "list" | "grid_view" | "filter_list"
   | "sort" | "open_in_new" | "drag_indicator" | "fiber_manual_record" | "task_alt"
   | "do_not_disturb" | "cancel" | "autorenew" | "database" | "storage" | "bolt"
-  | "spark" | "workspace_premium" | "shield" | "lock" | "globe" | "language";
+  | "spark" | "workspace_premium" | "shield" | "lock" | "globe" | "language"
+  | "logout";
 
 interface IconProps {
   name: string;

@@ -12,7 +12,7 @@
   "app": {
     "windows": [],
     "security": {
-      "csp": "default-src 'self'; img-src 'self' data: blob:; media-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:8765 http://localhost:8765 http://127.0.0.1:5173 http://localhost:5173"
+      "csp": "default-src 'self'; img-src 'self' data: blob: https:; media-src 'self' blob: data:; script-src 'self'; style-src 'self' 'unsafe-inline'; connect-src 'self' http://127.0.0.1:8765 http://localhost:8765 http://127.0.0.1:5173 http://localhost:5173 https://*.firebaseio.com https://*.googleapis.com wss://*.firebaseio.com https://qaztribber.aidi-lab.kz; frame-src https://*.firebaseapp.com"
     }
   },
   "bundle": {
@@ -30,7 +30,7 @@
     ],
     "category": "Productivity",
     "shortDescription": "Локальная расшифровка совещаний",
-    "longDescription": "QazTriber — локальный транскрибатор совещаний на базе GigaAM. Работает офлайн, поддерживает казахский, русский и смешанную речь.",
+    "longDescription": "QazTriber — локальный транскрибатор совещаний на базе ИИ модели для распознавания. Работает офлайн, поддерживает казахский, русский и смешанную речь.",
     "macOS": {
       "minimumSystemVersion": "11.0",
       "infoPlist": "Info.plist"

@@ -49,7 +49,7 @@ def wav_duration_seconds(path: Path) -> float:
 
 
 def split_wav(path: Path, output_dir: Path, max_seconds: float = 20.0, overlap_seconds: float = 0.4) -> list[Path]:
-    """Создаёт короткие WAV-фрагменты для базового long-audio режима GigaAM."""
+    """Создаёт короткие WAV-фрагменты для базового long-audio режима ИИ модели."""
     audio, sample_rate = sf.read(path, dtype="float32", always_2d=False)
     if audio.ndim > 1:
         audio = audio[:, 0]

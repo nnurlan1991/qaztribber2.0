@@ -252,9 +252,9 @@ class GigaAMService:
 
     @staticmethod
     def _configure_bundled_ffmpeg() -> None:
-        """Направляет внутренний вызов GigaAM на FFmpeg из установщика.
+        """Направляет внутренний вызов ИИ модели на FFmpeg из установщика.
 
-        GigaAM вызывает команду ``ffmpeg`` напрямую даже для уже нормализованного
+        ИИ модель вызывает команду ``ffmpeg`` напрямую даже для уже нормализованного
         WAV. В Windows-пакете системный FFmpeg отсутствует, но imageio-ffmpeg
         поставляет собственный бинарник с другим именем.
         """
@@ -318,7 +318,7 @@ class GigaAMService:
 
             expected_hash = gigaam._MODEL_HASHES[definition.gigaam_name]
             if target.is_file() and self._checksum(target) == expected_hash:
-                report(f"GigaAM {definition.parameters} уже сохранена на диске.", 1.0)
+                report(f"Модель {definition.parameters} уже сохранена на диске.", 1.0)
                 return
             if target.exists():
                 target.unlink()
@@ -359,7 +359,7 @@ class GigaAMService:
                 else:
                     temporary.unlink(missing_ok=True)
             else:
-                report(f"Подключение к серверу GigaAM {definition.parameters}…", 0.0)
+                report(f"Подключение к серверу для загрузки модели {definition.parameters}…", 0.0)
 
             try:
                 # Build request with Range header if resuming
@@ -431,7 +431,7 @@ class GigaAMService:
                                     0.0,
                                 )
 
-                report(f"Проверка файла GigaAM {definition.parameters}…", 0.995)
+                report(f"Проверка файла модели {definition.parameters}…", 0.995)
                 if self._checksum(temporary) != expected_hash:
                     temporary.unlink(missing_ok=True)  # Corrupted — delete
                     raise RuntimeError("контрольная сумма не совпала; файл не сохранён")
@@ -449,7 +449,7 @@ class GigaAMService:
                     temporary,
                 )
                 raise RuntimeError(
-                    f"Таймаут загрузки GigaAM {definition.parameters}: {error}"
+                    f"Таймаут загрузки модели {definition.parameters}: {error}"
                 ) from error
             except Exception as error:
                 if "контрольная сумма" in str(error):
@@ -461,10 +461,10 @@ class GigaAMService:
                     temporary,
                 )
                 raise RuntimeError(
-                    f"Не удалось скачать GigaAM {definition.parameters}: {error}"
+                    f"Не удалось скачать модель {definition.parameters}: {error}"
                 ) from error
 
-            report(f"GigaAM {definition.parameters} сохранена на диске.", 1.0)
+            report(f"Модель {definition.parameters} сохранена на диске.", 1.0)
 
     def delete(self, model_id: str) -> None:
         """Удаляет сохранённую модель и освобождает занятую ею память, если нужно."""
@@ -495,11 +495,11 @@ class GigaAMService:
             self.unload()
             definition = MODELS[model_id]
             self.ensure_download(model_id, lambda stage, fraction: report(stage, fraction * 0.22), lambda: False)
-            report(f"Загрузка GigaAM {definition.parameters} в память…", 0.24)
+            report(f"Загрузка модели {definition.parameters} в память…", 0.24)
             try:
                 import gigaam
             except ImportError as error:
-                raise RuntimeError("GigaAM не установлен. Выполните установку зависимостей backend.") from error
+                raise RuntimeError("ИИ модель не установлена. Выполните установку зависимостей backend.") from error
             self._configure_bundled_ffmpeg()
             self._model = gigaam.load_model(
                 definition.gigaam_name,
@@ -507,7 +507,7 @@ class GigaAMService:
                 download_root=str(self.models_dir),
             )
             self._active_model_id = model_id
-            report(f"GigaAM {definition.parameters} готова.", 0.3)
+            report(f"Модель {definition.parameters} готова.", 0.3)
 
     def transcribe(
         self,

@@ -36,6 +36,15 @@ node_modules/.vite/
 .opencode/
 .swarm/
 
+# Secrets — NEVER commit (Firebase service account, .env, tokens)
+**/firebase-service-account.json
+**/*service-account*.json
+**/*-adminsdk*.json
+admin-panel/server/.env
+admin-panel/server/dist/
+functions/lib/
+admin-panel/node_modules/
+
 # Backup files
 *.bak
 

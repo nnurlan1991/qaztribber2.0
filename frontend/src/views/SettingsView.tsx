@@ -107,7 +107,7 @@ export function SettingsView() {
         <div className="divider" />
         <div className="meta-row"><span className="meta-key">{t("settings.version")}</span><span className="meta-val mono" style={{ cursor: "pointer", userSelect: "none" }} onClick={handleVersionClick}>{APP_VERSION}</span></div>
         <div className="meta-row"><span className="meta-key">{t("settings.locale")}</span><span className="meta-val mono">{lang === "kz" ? "kk-KZ" : "ru-RU"}</span></div>
-        <div className="meta-row"><span className="meta-key">{t("settings.engine")}</span><span className="meta-val mono" style={{ fontSize: 12 }}>GigaAM · ONNX Runtime · CPU</span></div>
+        <div className="meta-row"><span className="meta-key">{t("settings.engine")}</span><span className="meta-val mono" style={{ fontSize: 12 }}>ИИ модель для распознавания</span></div>
       </section>
 
       {/* Links */}

@@ -19,7 +19,7 @@ class FakeGigaAM:
     def transcribe(self, model, wav_path, chunks_dir, report, cancelled):
         assert not cancelled()
         report("Скачивание модели…", 0.22)
-        report("Загрузка GigaAM 220M в память…", 0.30)
+        report("Загрузка модели 220M в память…", 0.30)
         report("Распознавание фрагмента 1/1…", 0.60)
         report("Объединение результата…", 0.97)
         return "Сәлем әлем"
@@ -30,7 +30,7 @@ class BlockingGigaAM:
 
     def transcribe(self, model, wav_path, chunks_dir, report, cancelled):
         # Report initial progress once (sets last_progress_time in Job)
-        report("Загрузка GigaAM 220M в память…", 0.30)
+        report("Загрузка модели 220M в память…", 0.30)
         # Simulate a single chunk iteration that checks cancelled
         sample_index = 0
         while not cancelled():
