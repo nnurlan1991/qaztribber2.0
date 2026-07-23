@@ -447,24 +447,17 @@ async def get_source_audio(job_id: str, request: Request):
             except (OSError, json.JSONDecodeError):
                 pass
 
-    # Determine extension: prefer original filename, else fallback to 'source'
-    ext = ""
-    if original_filename and "." in original_filename:
-        ext = "." + original_filename.rsplit(".", 1)[-1].lower()
-    elif source_path.suffix:
-        ext = source_path.suffix.lower()
-    else:
-        # No extension on 'source' file — guess from original filename or default to webm
-        ext = ".webm"
+    # Detect actual audio format from file content (magic bytes).
+    # MediaRecorder на macOS пишет MP4, но filename может быть .webm —
+    # доверяем содержимому, а не расширению.
+    media_type, ext = _detect_audio_format(source_path)
 
-    media_type = {
-        ".wav": "audio/wav",
-        ".mp3": "audio/mpeg",
-        ".m4a": "audio/mp4",
-        ".ogg": "audio/ogg",
-        ".flac": "audio/flac",
-        ".webm": "audio/webm",
-    }.get(ext, "application/octet-stream")
+    # Use original filename for download, but correct extension if mismatched
+    if original_filename and "." in original_filename:
+        orig_ext = "." + original_filename.rsplit(".", 1)[-1].lower()
+        if orig_ext != ext:
+            # Replace extension to match actual format
+            original_filename = original_filename.rsplit(".", 1)[0] + ext
 
     download_name = original_filename or f"{job_id}{ext}"
     return FileResponse(
@@ -472,6 +465,36 @@ async def get_source_audio(job_id: str, request: Request):
         media_type=media_type,
         filename=download_name,
     )
+
+
+def _detect_audio_format(path: Path) -> tuple[str, str]:
+    """Detect audio format from file magic bytes. Returns (media_type, extension)."""
+    try:
+        with open(path, "rb") as f:
+            header = f.read(12)
+    except OSError:
+        return "application/octet-stream", ""
+
+    # MP4/M4A: bytes 4-7 are 'ftyp'
+    if len(header) >= 8 and header[4:8] == b"ftyp":
+        return "audio/mp4", ".m4a"
+    # WebM/Matroska: EBML header
+    if header[:4] == b"\x1a\x45\xdf\xa3":
+        return "audio/webm", ".webm"
+    # WAV: RIFF....WAVE
+    if header[:4] == b"RIFF" and header[8:12] == b"WAVE":
+        return "audio/wav", ".wav"
+    # MP3: ID3 tag or frame sync
+    if header[:3] == b"ID3" or (len(header) >= 2 and header[0] == 0xFF and (header[1] & 0xE0) == 0xE0):
+        return "audio/mpeg", ".mp3"
+    # FLAC
+    if header[:4] == b"fLaC":
+        return "audio/flac", ".flac"
+    # OGG
+    if header[:4] == b"OggS":
+        return "audio/ogg", ".ogg"
+
+    return "application/octet-stream", ""
 
 
 @router.get("/sessions/{job_id}/files")

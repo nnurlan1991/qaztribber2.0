@@ -149,8 +149,14 @@ export function HomeView() {
       mediaRecorder.ondataavailable = (e) => chunks.current.push(e.data);
       mediaRecorder.onstop = () => {
         stream.getTracks().forEach((tr) => tr.stop());
-        const blob = new Blob(chunks.current, { type: mediaRecorder.mimeType || "audio/webm" });
-        selectFile(new File([blob], `recording-${Date.now()}.webm`, { type: blob.type }), "mic");
+        // MediaRecorder на macOS (WKWebView) пишет в MP4, не WebM.
+        // Расширение файла должно соответствовать реальному формату,
+        // иначе backend отдаст аудио с неверным Content-Type и
+        // <audio> не сможет воспроизвести.
+        const mime = mediaRecorder.mimeType || "audio/webm";
+        const ext = mime.includes("mp4") ? "m4a" : "webm";
+        const blob = new Blob(chunks.current, { type: mime });
+        selectFile(new File([blob], `recording-${Date.now()}.${ext}`, { type: mime }), "mic");
         setRecording(false);
       };
       recorder.current = mediaRecorder;

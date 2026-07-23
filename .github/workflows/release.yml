@@ -51,6 +51,10 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           python -m pip install -r backend/requirements.txt pyinstaller
+          # PyInstaller runtime hook (pyi_rth_pkgres) обращается к pkg_resources.NullProvider,
+          # удалённому в setuptools >= 70. Понижаем после установки всех зависимостей,
+          # т.к. torch требует setuptools>=77 — используем --no-deps чтобы обойти конфликт.
+          python -m pip install 'setuptools<70' --no-deps
 
       - name: Build PyInstaller sidecar
         env:
