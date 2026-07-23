@@ -46,6 +46,9 @@ def main() -> None:
         "--noconfirm",
         "--clean",
         "--onedir",
+        # Скрывает консольное окно на Windows. На macOS/no-op (launcher не имеет GUI).
+        # Без этого на Windows при спавне sidecar висит активное окно cmd.
+        "--windowed",
         "--name",
         SIDECAR_DIR_NAME,
         "--add-data",

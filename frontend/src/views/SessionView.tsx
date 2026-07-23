@@ -194,7 +194,7 @@ export function SessionView() {
         setError(t("session.audioMissing"));
         return;
       }
-      const filename = session.originalFilename || `${session.id.slice(-8)}.audio`;
+      const filename = session.originalFilename || `${session.id.slice(-8)}.webm`;
       const file = new File([blob], filename, { type: blob.type || "audio/wav" });
       // Pass to HomeView via store
       setPendingRerun({

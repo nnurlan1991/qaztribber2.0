@@ -501,9 +501,14 @@ class GigaAMService:
             except ImportError as error:
                 raise RuntimeError("ИИ модель не установлена. Выполните установку зависимостей backend.") from error
             self._configure_bundled_ffmpeg()
+            # На CPU fp16_encoder=True даёт деградированное качество: операции не
+            # падают, но точность вычислений снижается, модель выдаёт мусор.
+            # Отключаем fp16 на CPU; на MPS/CUDA оставляем для скорости.
+            device = self.device()
             self._model = gigaam.load_model(
                 definition.gigaam_name,
-                device=self.device(),
+                fp16_encoder=device != "cpu",
+                device=device,
                 download_root=str(self.models_dir),
             )
             self._active_model_id = model_id

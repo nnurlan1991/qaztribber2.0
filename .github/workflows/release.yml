@@ -63,6 +63,16 @@ jobs:
       - name: Build Tauri app
         run: npm run tauri build
 
+      # Ad-hoc signing для macOS: подписывает внутренние библиотеки sidecar
+      # (PyInstaller binaries, libtorch .dylib). Без этого macOS показывает
+      # "QazTriber is damaged and can't be opened" из-за неподписанных .dylib.
+      # Без Apple Developer ID Gatekeeper всё равно покажет диалог, но
+      # пользователь сможет обойти: Right-click → Open → "Open anyway".
+      - name: Ad-hoc sign macOS app
+        if: matrix.os == 'macos-14'
+        run: |
+          codesign --force --deep --sign - src-tauri/target/release/bundle/macos/*.app
+
       # macOS: upload .app and .dmg separately (upload-artifact does NOT support bash brace expansion)
       - name: Upload macOS .app
         if: matrix.os == 'macos-14'

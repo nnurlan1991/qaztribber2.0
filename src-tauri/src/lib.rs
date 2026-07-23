@@ -44,13 +44,21 @@ fn spawn_sidecar_thread(
     std::thread::spawn(move || {
         let mut attempt: u32 = 0;
         loop {
-            let child = match Command::new(&resource_path)
+            let mut command = Command::new(&resource_path);
+            command
                 .env("PYTHONUTF8", "1")
                 .env("PYTHONIOENCODING", "utf-8")
                 .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn()
+                .stderr(Stdio::null());
+            #[cfg(target_os = "windows")]
             {
+                use std::os::windows::process::CommandExt;
+                // CREATE_NO_WINDOW (0x08000000) — предотвращает появление
+                // консольного окна cmd.exe при спавне sidecar на Windows.
+                const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+                command.creation_flags(CREATE_NO_WINDOW);
+            }
+            let child = match command.spawn() {
                 Ok(c) => c,
                 Err(e) => {
                     eprintln!("Failed to spawn sidecar: {}", e);
@@ -386,14 +394,15 @@ pub fn run() {
 
                 spawn_sidecar_thread(app.handle().clone(), resource_path, shared_child.clone());
 
-                // BUG S2: improved error message — keep wait_for_backend so the
-                // webview doesn't show a connection error on first load
+                // Не возвращаем Err при неудаче старта sidecar — показываем окно
+                // с диагностикой вместо молчаливого краха. С `panic = "abort"` в
+                // release паника убивает процесс мгновенно, без окна. Frontend
+                // покажет ошибку соединения; health monitor сообщит unreachable.
                 if !wait_for_backend(BACKEND_STARTUP_TIMEOUT_SECS) {
-                    return Err(format!(
-                        "Бэкенд не запустился за {} сек. Проверьте логи в Settings → Debug.",
+                    eprintln!(
+                        "Backend failed to start within {}s — window will show connection error",
                         BACKEND_STARTUP_TIMEOUT_SECS
-                    )
-                    .into());
+                    );
                 }
 
                 // Start health monitor after backend is confirmed ready
@@ -418,8 +427,19 @@ pub fn run() {
 
             Ok(())
         })
-        .build(tauri::generate_context!())
-        .expect("error while building tauri application");
+        .build(tauri::generate_context!());
+
+    let app = match app {
+        Ok(app) => app,
+        Err(e) => {
+            // С `panic = "abort"` .expect() убивает процесс мгновенно без окна.
+            // Логируем и выходим с кодом — пользователь хотя бы увидит stderr
+            // при запуске из терминала. Основной сценарий ошибок sidecar уже
+            // обработан в setup (логируем, но не паникуем).
+            eprintln!("Failed to build Tauri app: {}", e);
+            std::process::exit(1);
+        }
+    };
 
     // BUG C1: kill sidecar on app exit via RunEvent
     app.run(move |app_handle, event| {
