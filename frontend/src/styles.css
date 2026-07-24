@@ -445,8 +445,6 @@ a { color: inherit; text-decoration: none; }
 
 @media (max-width: 1000px) {
   .home-hero-compact { flex-wrap: wrap; }
-  /* Zone A (title) stays full width on first row */
-  .hero-zone-a { flex: 1 1 100%; border-left: none; padding-left: 0; }
   /* Zone R (record) goes to second row with B and C */
   .hero-zone-r { order: 2; border-left: none; border-top: 1px solid var(--border-soft); padding-top: var(--sp-3); padding-left: 0; margin-top: var(--sp-2); }
   .hero-zone-b { order: 3; border-left: none; border-top: 1px solid var(--border-soft); padding-top: var(--sp-3); }
@@ -1132,4 +1130,86 @@ a { color: inherit; text-decoration: none; }
 @keyframes pulse-soft {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
+}
+
+/* Gemini toast — floating prompt after transcription completes */
+.gemini-toast {
+  position: fixed;
+  bottom: 24px;
+  right: 24px;
+  z-index: 9000;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  max-width: 380px;
+  padding: 16px 18px;
+  border-radius: var(--r-lg, 12px);
+  background: var(--surface, #151314);
+  border: 1px solid var(--gold-shimmer, #e6ca65);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(230, 202, 101, 0.15);
+  animation: gemini-toast-in 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+}
+.gemini-toast-close {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border: none;
+  background: transparent;
+  color: var(--text-muted, #a39d92);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.15s, color 0.15s;
+}
+.gemini-toast-close:hover {
+  background: var(--overlay-bg, rgba(255, 255, 255, 0.08));
+  color: var(--text, #f5f3ee);
+}
+.gemini-toast-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  flex-shrink: 0;
+  border-radius: 10px;
+  background: linear-gradient(135deg, rgba(230, 202, 101, 0.15), rgba(153, 101, 21, 0.1));
+  color: var(--gold-shimmer, #e6ca65);
+}
+.gemini-toast-body {
+  flex: 1;
+  min-width: 0;
+}
+.gemini-toast-title {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text, #f5f3ee);
+  margin-bottom: 2px;
+}
+.gemini-toast-text {
+  font-size: 12px;
+  line-height: 1.45;
+  color: var(--text-muted, #a39d92);
+}
+@keyframes gemini-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+@media (max-width: 640px) {
+  .gemini-toast {
+    bottom: 12px;
+    right: 12px;
+    left: 12px;
+    max-width: none;
+  }
 }

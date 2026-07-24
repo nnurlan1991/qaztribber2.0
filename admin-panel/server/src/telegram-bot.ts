@@ -181,87 +181,89 @@ export function startBot(): void {
     }
   });
 
-  // ---------- Polling sync (replaces onSnapshot — gRPC unstable under pm2) ----------
-  // Every 5s: query Firestore for pending + approved users, detect changes,
-  // send/edit Telegram messages. This is the cross-channel sync mechanism:
-  //   - Web admin approves → polling detects → bot edits message to ✅
-  //   - Bot approves via inline button → web admin sees on next 4s poll
-  setupPollingSync();
+  // ---------- Snapshot sync (onSnapshot real-time listeners) ----------
+  setupSnapshotSync();
 
   console.log(`[telegram] bot started, admin chat_id=${adminChatId}`);
 }
 
-// ---------- Polling sync (replaces onSnapshot) ----------
-// In-memory state: track which users we've already sent/edited messages for.
-// Cleared on restart (acceptable — bot re-sends messages for pending users
-// that have no pendingMessageId, and re-edits those that do).
-const seenPending = new Set<string>();   // uids we've already handled as pending
-const seenApproved = new Set<string>();  // uids we've already handled as approved
+// ---------- Snapshot sync (onSnapshot real-time listeners) ----------
+//
+// Replaces the 5s polling loop that exhausted Firestore quota (50K reads/day
+// on Spark plan). onSnapshot pushes only changed documents over a persistent
+// gRPC connection — idle cost is 0 reads.
+//
+// Two listeners:
+//   A) pending (approved==false): new user → send message; revoked → re-pending
+//   B) approved (approved==true):  approved → edit message to ✅
+//
+// Transitions are handled by docChanges():
+//   pending→approved: pending listener sees "removed", approved listener sees "added"
+//   approved→pending: approved listener sees "removed", pending listener sees "added"
+//
+// Error handling: Firebase SDK auto-retries on transient gRPC errors.
+// The error callback logs without crashing — the process stays alive (global
+// unhandledRejection/uncaughtException handlers in index.ts are the backstop).
 
-const POLL_INTERVAL_MS = 5000;
-
-function setupPollingSync(): void {
-  setInterval(async () => {
-    try {
-      await pollPending();
-      await pollApproved();
-    } catch (e) {
-      console.error("[telegram] poll error:", (e as Error).message);
-    }
-  }, POLL_INTERVAL_MS);
-}
-
-async function pollPending(): Promise<void> {
-  const snap = await getDb()
+function setupSnapshotSync(): void {
+  // Listener A: pending users (approved == false)
+  getDb()
     .collection(USERS_COLLECTION)
     .where("approved", "==", false)
-    .get();
+    .onSnapshot(
+      async (snap) => {
+        for (const change of snap.docChanges()) {
+          if (change.type === "added" || change.type === "modified") {
+            const u = change.doc.data() as UserDoc;
 
-  for (const doc of snap.docs) {
-    const u = doc.data() as UserDoc;
+            // Auto-approve: check whitelist before sending notification
+            if (u.email) {
+              const autoApproved = await autoApproveIfWhitelisted(u.uid, u.email).catch(() => false);
+              if (autoApproved) {
+                console.log(`[telegram] auto-approved whitelisted user: ${u.email}`);
+                continue; // approved listener will fire with "added" → editToApproved
+              }
+            }
 
-    // Auto-approve: check if email is in whitelist
-    if (u.email) {
-      const autoApproved = await autoApproveIfWhitelisted(u.uid, u.email).catch(() => false);
-      if (autoApproved) {
-        console.log(`[telegram] auto-approved whitelisted user: ${u.email}`);
-        seenPending.delete(u.uid);
-        continue; // skip sending pending message — user is now approved
-      }
-    }
+            // Send (new) or refresh (existing) pending message
+            if (u.pendingMessageId) {
+              await editToPending(u).catch(() => {});
+            } else {
+              await sendPendingMessage(u).catch(() => {});
+            }
+          }
+          // "removed" = user approved or deleted — approved listener handles the edit
+        }
+      },
+      (err: Error) => {
+        console.error("[telegram] pending listener error:", err.message);
+        // SDK auto-retries; no manual reconnect needed
+      },
+    );
 
-    if (u.pendingMessageId) {
-      if (!seenPending.has(u.uid) || seenApproved.has(u.uid)) {
-        seenApproved.delete(u.uid);
-        seenPending.add(u.uid);
-        await editToPending(u).catch(() => {});
-      }
-    } else {
-      if (!seenPending.has(u.uid)) {
-        seenPending.add(u.uid);
-        await sendPendingMessage(u).catch(() => {});
-      }
-    }
-  }
-}
-
-async function pollApproved(): Promise<void> {
-  const snap = await getDb()
+  // Listener B: approved users (approved == true)
+  getDb()
     .collection(USERS_COLLECTION)
     .where("approved", "==", true)
-    .get();
+    .onSnapshot(
+      async (snap) => {
+        for (const change of snap.docChanges()) {
+          if (change.type === "added") {
+            const u = change.doc.data() as UserDoc;
+            // Edit existing pending message to ✅
+            if (u.pendingMessageId) {
+              await editToApproved(u).catch(() => {});
+            }
+          }
+          // "modified"/"removed" not needed for approved users
+        }
+      },
+      (err: Error) => {
+        console.error("[telegram] approved listener error:", err.message);
+      },
+    );
 
-  for (const doc of snap.docs) {
-    const u = doc.data() as UserDoc;
-    // If user was previously seen as pending and now approved → edit to ✅.
-    if (u.pendingMessageId && seenPending.has(u.uid) && !seenApproved.has(u.uid)) {
-      seenApproved.add(u.uid);
-      seenPending.delete(u.uid);
-      await editToApproved(u).catch(() => {});
-    }
-    // Mark as seen-approved so we don't re-process.
-    seenApproved.add(u.uid);
-  }
+  console.log("[telegram] snapshot sync active (onSnapshot listeners)");
 }
 
 async function sendPendingMessage(u: UserDoc): Promise<void> {

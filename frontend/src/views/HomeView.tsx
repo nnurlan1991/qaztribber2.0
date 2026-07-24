@@ -1,5 +1,5 @@
 import { ChangeEvent, DragEvent, useEffect, useMemo, useRef, useState } from "react";
-import { cancelJob, createJob, deleteJob, getResult, pauseJob, resumeJob, startPreload, watchJob, saveAndOpenTxt } from "../api";
+import { cancelJob, createJob, deleteJob, getResult, pauseJob, resumeJob, startPreload, watchJob, saveAndOpenTxt, openUrl } from "../api";
 import { jobToSession, useApp } from "../store";
 import { Icon } from "../icons";
 import { ProgressBar } from "../components/ProgressBar";
@@ -245,6 +245,20 @@ export function HomeView() {
     await saveAndOpenTxt(result.text, baseName);
   }
 
+  const GEMINI_URL = "https://gemini.google.com/gem/1JBgcHx9CZmalO7WdJlQ2JBl9yUgAnKde?usp=sharing";
+
+  async function handleGemini() {
+    if (!result) return;
+    try {
+      await navigator.clipboard.writeText(result.text);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1800);
+    } catch {
+      // Clipboard may be blocked — continue anyway, user can copy manually
+    }
+    await openUrl(GEMINI_URL);
+  }
+
   async function handleDownloadForTranscribe(modelId: Model["id"]) {
     setShowModelDialog(false);
     pendingModel.current = modelId;
@@ -317,17 +331,9 @@ export function HomeView() {
         </div>
       )}
 
-      {/* Compact hero: title | record | language | transcribe */}
+      {/* Compact hero: record | language | transcribe */}
       <section className="card home-hero-compact gold-edge">
-        {/* ЗОНА A: только заголовок */}
-        <div className="hero-zone hero-zone-a">
-          <div className="hero-text">
-            <h1>{t("home.title")}</h1>
-            <div className="sub">{t("home.subtitle")}</div>
-          </div>
-        </div>
-
-        {/* ЗОНА R: кнопка записи (отдельно от заголовка) */}
+        {/* ЗОНА R: кнопка записи */}
         <div className="hero-zone hero-zone-r">
           <div className="home-rec-cluster">
             <button className={`rec-btn ${recording ? "recording" : ""}`} disabled={busy} onClick={toggleRecording} aria-label={recording ? "Stop" : "Record"}>
@@ -466,12 +472,16 @@ export function HomeView() {
           />
 
           {result && (
-            <div className="result-actions-row">
-              <button className="btn btn-soft sm" onClick={copyText}><Icon name={copied ? "check" : "content_copy"} size={14} />{copied ? t("session.copied") : t("session.copy")}</button>
-              <button className="btn btn-ghost sm" onClick={handleDownloadTxt}><Icon name="download" size={14} />{t("session.download")}</button>
-              <button className="btn btn-link sm" onClick={() => navigate("session", result.id)}>{t("session.metadata")} <Icon name="chevron_right" size={14} /></button>
-              <button className="btn btn-link sm" onClick={reset} style={{ marginLeft: "auto" }}>{t("session.new")}</button>
-            </div>
+            <>
+              <div className="result-actions-row">
+                <button className="btn btn-soft sm" onClick={copyText}><Icon name={copied ? "check" : "content_copy"} size={14} />{copied ? t("session.copied") : t("session.copy")}</button>
+                <button className="btn btn-soft sm" onClick={handleGemini} title={t("session.geminiHint")}><Icon name="bolt" size={14} />{t("session.gemini")}</button>
+                <button className="btn btn-ghost sm" onClick={handleDownloadTxt}><Icon name="download" size={14} />{t("session.download")}</button>
+                <button className="btn btn-link sm" onClick={() => navigate("session", result.id)}>{t("session.metadata")} <Icon name="chevron_right" size={14} /></button>
+                <button className="btn btn-link sm" onClick={reset} style={{ marginLeft: "auto" }}>{t("session.new")}</button>
+              </div>
+              <GeminiToast resultId={result.id} onOpen={handleGemini} t={t} />
+            </>
           )}
         </section>
       </div>
@@ -490,6 +500,44 @@ export function HomeView() {
           estimatedSeconds={30}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * Floating toast that appears after transcription completes, prompting the
+ * user to send the transcript to Gemini for summarization. Auto-dismisses
+ * after 10s. Re-appears when a new result arrives (keyed by resultId).
+ */
+function GeminiToast({ resultId, onOpen, t }: {
+  resultId: string;
+  onOpen: () => void;
+  t: (key: string) => string;
+}) {
+  const [visible, setVisible] = useState(true);
+
+  useEffect(() => {
+    setVisible(true);
+    const timer = window.setTimeout(() => setVisible(false), 10000);
+    return () => window.clearTimeout(timer);
+  }, [resultId]);
+
+  if (!visible) return null;
+
+  return (
+    <div className="gemini-toast">
+      <button className="gemini-toast-close" onClick={() => setVisible(false)} aria-label="Close">
+        <Icon name="close" size={14} />
+      </button>
+      <div className="gemini-toast-icon"><Icon name="bolt" size={20} fill /></div>
+      <div className="gemini-toast-body">
+        <div className="gemini-toast-title">{t("session.geminiToastTitle")}</div>
+        <div className="gemini-toast-text">{t("session.geminiToastBody")}</div>
+      </div>
+      <button className="btn btn-gold sm" onClick={onOpen}>
+        <Icon name="bolt" size={14} fill />
+        {t("session.geminiToastAction")}
+      </button>
     </div>
   );
 }

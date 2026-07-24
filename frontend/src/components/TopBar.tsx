@@ -3,7 +3,7 @@ import { LANGS } from "../i18n";
 import { Icon } from "../icons";
 
 const VIEW_TITLE: Record<View, string> = {
-  home: "nav.workspace",
+  home: "home.title",
   history: "nav.history",
   session: "nav.session",
   models: "nav.models",

@@ -55,8 +55,13 @@ googleAuthRouter.post("/complete", async (req, res) => {
     // Verify the Firebase ID token (confirms it's a real Firebase user)
     const decoded = await getAdminAuth().verifyIdToken(idToken);
 
-    // Create a custom token for the desktop app to sign in with
-    const customToken = await getAdminAuth().createCustomToken(decoded.uid);
+    // Create a custom token for the desktop app to sign in with.
+    // Embed provider=google in claims so the desktop client can correctly
+    // identify the sign-in method (signInWithCustomToken doesn't populate
+    // providerData with google.com — only the custom provider).
+    const customToken = await getAdminAuth().createCustomToken(decoded.uid, {
+      provider: "google",
+    });
 
     session.status = "done";
     session.customToken = customToken;

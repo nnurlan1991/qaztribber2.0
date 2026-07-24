@@ -48,16 +48,32 @@ interface AuthCtx {
 
 const Ctx = createContext<AuthCtx | null>(null);
 
-function resolveProvider(user: User): "google" | "email" {
+function resolveProviderSync(user: User): "google" | "email" {
   return user.providerData.some((p) => p.providerId === "google.com") ? "google" : "email";
 }
 
-function toAuthUser(user: User): AuthUser {
+/**
+ * Resolve sign-in provider. Checks custom claims first (set by the VPS
+ * Google Sign-In flow via createCustomToken with { provider: "google" }),
+ * because signInWithCustomToken doesn't populate providerData with google.com.
+ * Falls back to providerData for direct email/password sign-in.
+ */
+async function resolveProvider(user: User): Promise<"google" | "email"> {
+  try {
+    const idTokenResult = await user.getIdTokenResult();
+    if (idTokenResult.claims.provider === "google") return "google";
+  } catch {
+    // ignore — fall back to providerData
+  }
+  return resolveProviderSync(user);
+}
+
+async function toAuthUser(user: User): Promise<AuthUser> {
   return {
     uid: user.uid,
     email: user.email ?? "",
     displayName: user.displayName ?? "",
-    provider: resolveProvider(user),
+    provider: await resolveProvider(user),
   };
 }
 
@@ -90,13 +106,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      const authUser = toAuthUser(fbUser);
+      const authUser = await toAuthUser(fbUser);
       setUser(authUser);
       setState("loading"); // while we check approval
 
       // Ensure the pending doc exists (create if missing). Firestore rules
       // enforce approved=false on create and reject if doc already exists
-      // (idempotent — setDoc with merge would clobber; we use a guard).
+      // (idempotent — setDoc with Merge would clobber; we use a guard).
       const userRef = doc(db, "users", fbUser.uid);
       try {
         // Try to create — rules will reject if doc already exists (update denied
@@ -106,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           uid: fbUser.uid,
           email: fbUser.email ?? "",
           displayName: fbUser.displayName ?? "",
-          provider: resolveProvider(fbUser),
+          provider: await resolveProvider(fbUser),
           approved: false,
           createdAt: serverTimestamp(),
         });

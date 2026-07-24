@@ -87,7 +87,8 @@ function Shell() {
       await markInitialized();
       setShowOnboarding(false);
       await startPreload(models);
-      setShowDownloadModal(true);
+      // Don't open the download modal — let the DownloadStatusBar on the
+      // main screen show progress. User can click it for details.
     } catch (reason) {
       setError((reason as Error).message);
     }
